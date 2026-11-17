@@ -120,7 +120,7 @@ beforeAll(async () => {
   tzOriginal = rows[0].timezone;
 
   const { rows: srv } = await db.queryAdmin<{ id: string; name: string }>(
-    `SELECT id, name FROM services WHERE tenant_id = $1 AND is_active = true LIMIT 1`,
+    `SELECT id, name FROM services WHERE tenant_id = $1 AND is_active = true AND NOT es_adicional ORDER BY sort_order LIMIT 1`,
     [tenant.id],
   );
   servicio = { id: srv[0].id, name: srv[0].name, price: 2_500_000, minutes: 30 };

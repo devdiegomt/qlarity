@@ -237,18 +237,49 @@ CREATE POLICY appointment_status_log_por_turno ON appointment_status_log
     )
   );`;
 
-  return porTenant + tenants + derivadas;
+  // Las globales: no son de ningún lavadero, así que no se aíslan por tenant.
+  //
+  // Antes quedaban **sin** RLS: `plans` es el catálogo de la plataforma, y
+  // `refresh_tokens` se consulta por el hash antes de saber de qué lavadero es
+  // la sesión. Eso estaba bien para la aplicación, pero Supabase publica toda
+  // tabla de `public` por su API de datos (PostgREST), y una tabla sin RLS ahí
+  // la lee cualquiera con la clave pública del proyecto. Supabase lo avisó por
+  // correo (2026-11).
+  //
+  // La política deja entrar sólo al rol de la aplicación, con el mismo acceso
+  // que tenía: nada cambia para Qlarity, y los roles de la API de Supabase
+  // (`anon`, `authenticated`) no tienen ninguna política, así que no ven nada.
+  // Sin FORCE: el dueño —las migraciones— sigue sin pasar por la política.
+  const globales = ['plans', 'refresh_tokens']
+    .map(
+      (tabla) => `
+ALTER TABLE ${tabla} ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS ${tabla}_aplicacion ON ${tabla};
+CREATE POLICY ${tabla}_aplicacion ON ${tabla} TO ${ROL} USING (true) WITH CHECK (true);`,
+    )
+    .join('\n');
+
+  // Segunda capa: quitarles a los roles de la API de Supabase todo permiso
+  // sobre nuestras tablas. Qlarity no usa esa API; con esto, aunque mañana una
+  // tabla nueva quedara sin RLS, no se podría leer por ahí. En una base que no
+  // es de Supabase esos roles no existen y no se hace nada.
+  const apiSupabase = `
+DO $$
+DECLARE r text;
+BEGIN
+  FOREACH r IN ARRAY ARRAY['anon', 'authenticated'] LOOP
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN
+      EXECUTE format('REVOKE ALL ON ALL TABLES IN SCHEMA public FROM %I', r);
+      EXECUTE format('REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM %I', r);
+      EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM %I', r);
+      EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM %I', r);
+    END IF;
+  END LOOP;
+END $$;`;
+
+  return porTenant + tenants + derivadas + globales + apiSupabase;
 }
 
-/**
- * `plans` y `refresh_tokens` quedan **sin** RLS, a propósito:
- *
- * - `plans` es el catálogo global de la plataforma. No es de nadie.
- * - `refresh_tokens` se consulta por el hash del token, antes de saber de qué
- *   tenant es la sesión — el mismo problema de orden que la autenticación. Lo
- *   que lo protege es que sólo guarda hashes: quien lea la tabla no puede
- *   suplantar a nadie.
- */
 async function migrate(): Promise<void> {
   console.log('🔄 Habilitando Row Level Security...');
   try {
@@ -264,7 +295,7 @@ async function migrate(): Promise<void> {
 
     const tablas = await tablasPorTenant();
     await pool.query(sqlDePoliticas(tablas));
-    console.log(`   🔒 RLS en ${tablas.length + 2} tablas (${tablas.join(', ')})`);
+    console.log(`   🔒 RLS en ${tablas.length + 4} tablas (${tablas.join(', ')}, más tenants, appointment_status_log, plans y refresh_tokens)`);
 
     const { rows } = await pool.query<{ n: string }>(
       `SELECT count(*)::text AS n FROM pg_policies WHERE schemaname = 'public'`,
