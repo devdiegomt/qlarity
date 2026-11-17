@@ -86,6 +86,29 @@ export async function today(req: Request, res: Response): Promise<void> {
   res.json(rows);
 }
 
+// ─── GET /api/appointments/proximas ───────────────────────────────────────────
+
+/**
+ * Los turnos pendientes de los próximos días (sin contar hoy, que ya está en
+ * el tablero).
+ *
+ * Existe por las reservas web: casi siempre son para otro día, y el tablero
+ * sólo muestra hoy. El primer lavadero no las encontraba en ninguna parte
+ * salvo buscando la fecha a mano en la agenda. Ahora Inicio y el tablero las
+ * listan.
+ */
+export async function proximas(req: Request, res: Response): Promise<void> {
+  const todayDate = await getTenantToday(req.tenantId!);
+  const { rows } = await db.query(
+    `${APPOINTMENT_SELECT}
+     WHERE a.tenant_id = $1 AND a.scheduled_date > $2::date AND a.status = 'pending'
+     ORDER BY a.scheduled_date ASC, a.scheduled_time ASC NULLS LAST, a.created_at ASC
+     LIMIT 50`,
+    [req.tenantId, todayDate],
+  );
+  res.json(rows);
+}
+
 // ─── GET /api/appointments/:id ────────────────────────────────────────────────
 
 export async function getById(req: Request, res: Response): Promise<void> {

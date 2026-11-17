@@ -2,6 +2,7 @@ import { Placa } from '../lib/estados';
 import { METODOS_PAGO as METHODS } from '../lib/metodos-pago';
 import { ReceiptText, Wallet, type LucideIcon } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
+import { fechaLocal, sumarDias } from '../lib/fechas';
 import { api } from '../lib/api';
 import { formatCOP } from '../lib/format';
 import type { PaymentMethod } from '../types';
@@ -52,16 +53,11 @@ export default function PaymentsPage() {
   const [pagination, setPagination] = useState({ total: 0, page: 1 });
 
   const getDateRange = (): { from?: string; to?: string } => {
-    const today = new Date().toISOString().split('T')[0];
+    // En la hora del celular, no en UTC: ver lib/fechas.ts.
+    const today = fechaLocal();
     if (range === 'today') return { from: today, to: today };
-    if (range === 'week') {
-      const d = new Date(); d.setDate(d.getDate() - 7);
-      return { from: d.toISOString().split('T')[0], to: today };
-    }
-    if (range === 'month') {
-      const d = new Date(); d.setDate(1);
-      return { from: d.toISOString().split('T')[0], to: today };
-    }
+    if (range === 'week') return { from: sumarDias(today, -7), to: today };
+    if (range === 'month') return { from: today.slice(0, 8) + '01', to: today };
     return {};
   };
 

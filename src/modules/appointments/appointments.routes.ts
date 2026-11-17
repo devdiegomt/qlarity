@@ -10,6 +10,7 @@ router.use(authenticate, requireTenant);
 
 router.get('/',         validate(schemas.queryListado, 'query'), asyncHandler(ctrl.list));
 router.get('/today',    validate(schemas.queryListado, 'query'), asyncHandler(ctrl.today));
+router.get('/proximas', asyncHandler(ctrl.proximas));
 router.get('/:id',      validateId, asyncHandler(ctrl.getById));
 router.post('/',        planLimit('appointments'), validate(schemas.appointmentCreate), asyncHandler(ctrl.create));
 router.patch('/:id',    validateId, asyncHandler(ctrl.update));
