@@ -222,6 +222,8 @@ export const schemas = {
     model: optStr(50),
     color: optStr(30),
     serviceId: uuid,
+    // Servicios adicionales («encera tú mismo»), sumados al lavado.
+    adicionales: z.array(uuid).max(5).default([]),
     scheduledTime: timeStr,
     assignedTo: uuid.optional().nullable(),
     bayNumber: z.number().int().min(1).max(20).optional().nullable(),
@@ -278,6 +280,8 @@ export const schemas = {
     pricePickup: priceCents,
     estimatedMinutes: z.number().int().min(5).max(600).default(60),
     sortOrder: z.number().int().min(0).max(100).default(0),
+    // Se suma a un lavado, no se reserva solo («encera tú mismo»).
+    esAdicional: z.boolean().default(false),
   }),
 
   // ── Payments ──────────────────────────────────────────────────────────────
@@ -432,6 +436,7 @@ export const schemas = {
       pricePickup: priceCents.optional(),
       estimatedMinutes: z.number().int().min(5).max(600).optional(),
       sortOrder: z.number().int().min(0).max(100).optional(),
+      esAdicional: z.boolean().optional(),
     })
     .passthrough(),
 

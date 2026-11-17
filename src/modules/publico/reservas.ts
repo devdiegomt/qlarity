@@ -42,6 +42,7 @@ import {
 import { autorizacionDe, VERSION_AVISO_LAVADERO } from '../whatsapp/consentimiento';
 import { registrarAutorizacion } from '../whatsapp/wa-identity';
 import type { ServiceRow, VehicleType } from '../../types/entities';
+import { guardarAdicionales, resolverAdicionales, sumaMinutos, sumaPrecio } from '../appointments/adicionales';
 
 /** Cada cuánto se ofrece una hora de inicio. */
 export const PASO_MIN = 30;
@@ -142,7 +143,11 @@ export function horasLibres(args: {
  */
 async function ocupadosDelDia(tenantId: string, fecha: string): Promise<TurnoOcupado[]> {
   const { rows } = await db.query<{ scheduled_time: string; estimated_minutes: number | null }>(
-    `SELECT a.scheduled_time, s.estimated_minutes
+    // Lo que ocupa la bahía es el lavado más sus adicionales («encera tú mismo»).
+    `SELECT a.scheduled_time,
+            s.estimated_minutes
+              + COALESCE((SELECT SUM(e.minutes) FROM appointment_extras e WHERE e.appointment_id = a.id), 0)
+              AS estimated_minutes
        FROM appointments a
        JOIN services s ON s.id = a.service_id
       WHERE a.tenant_id = $1
@@ -215,6 +220,7 @@ export async function datosParaReservar(req: Request, res: Response): Promise<vo
     recibeReservas: recibeReservas(cfg),
     tipos: TIPOS,
     servicios: servicios
+      .filter((s) => !s.es_adicional)
       .map((s) => ({
         id: s.id,
         nombre: s.name,
@@ -223,6 +229,17 @@ export async function datosParaReservar(req: Request, res: Response): Promise<vo
         precios: Object.fromEntries(TIPOS.map((t) => [t, precioPara(s, t)])),
       }))
       // Un servicio sin precio para ningún tipo no se puede reservar.
+      .filter((s) => Object.values(s.precios).some((p) => p !== null)),
+    // Se suman a un lavado; no se reservan solos.
+    adicionales: servicios
+      .filter((s) => s.es_adicional)
+      .map((s) => ({
+        id: s.id,
+        nombre: s.name,
+        descripcion: s.description ?? null,
+        minutos: s.estimated_minutes ?? 30,
+        precios: Object.fromEntries(TIPOS.map((t) => [t, precioPara(s, t)])),
+      }))
       .filter((s) => Object.values(s.precios).some((p) => p !== null)),
   });
 }
@@ -243,11 +260,25 @@ export async function horarios(req: Request, res: Response): Promise<void> {
   const tenantId = req.tenantId as string;
   const cfg = await leerConfig(tenantId);
   const { rows } = await db.query<ServiceRow>(
-    'SELECT * FROM services WHERE tenant_id = $1 AND id = $2 AND is_active = true',
+    'SELECT * FROM services WHERE tenant_id = $1 AND id = $2 AND is_active = true AND NOT es_adicional',
     [tenantId, servicio.data],
   );
   if (!rows[0]) throw new AppError('Servicio no encontrado', 404);
-  const minutos = rows[0].estimated_minutes ?? 60;
+
+  // `?adicionales=id,id`: alargan el turno, así que cambian qué horas caben.
+  const ids = String(req.query.adicionales ?? '').split(',').filter(Boolean);
+  if (ids.length > 5 || !ids.every((i) => uuid.safeParse(i).success)) throw new AppError('Adicional inválido', 400);
+  let extra = 0;
+  if (ids.length > 0) {
+    const { rows: ad } = await db.query<{ minutos: number; n: string }>(
+      `SELECT COALESCE(SUM(estimated_minutes), 0)::int AS minutos, COUNT(*) AS n FROM services
+        WHERE tenant_id = $1 AND id = ANY($2::uuid[]) AND is_active = true AND es_adicional`,
+      [tenantId, [...new Set(ids)]],
+    );
+    if (parseInt(ad[0].n, 10) !== new Set(ids).size) throw new AppError('Adicional inválido', 400);
+    extra = ad[0].minutos;
+  }
+  const minutos = (rows[0].estimated_minutes ?? 60) + extra;
 
   const { hoy, dias } = diasDeLaVentana(cfg);
   const resultado = [];
@@ -266,6 +297,7 @@ export const esquemaReserva = z.object({
     errorMap: () => ({ message: 'Para reservar tienes que autorizar el tratamiento de tus datos' }),
   }),
   servicioId: z.string().uuid('Elige un servicio de la lista'),
+  adicionales: z.array(z.string().uuid('Adicional inválido')).max(5).default([]),
   tipoVehiculo: z.enum(['sedan', 'suv', 'camioneta', 'pickup', 'moto'], {
     errorMap: () => ({ message: 'Elige un tipo de vehículo de la lista' }),
   }),
@@ -309,12 +341,20 @@ export async function reservar(req: Request, res: Response): Promise<void> {
   if (!recibeReservas(cfg)) throw new AppError(NO_RECIBE, 409, { codigo: 'NO_RECIBE' });
 
   const { rows: svc } = await db.query<ServiceRow>(
-    'SELECT * FROM services WHERE tenant_id = $1 AND id = $2 AND is_active = true',
+    'SELECT * FROM services WHERE tenant_id = $1 AND id = $2 AND is_active = true AND NOT es_adicional',
     [tenantId, b.servicioId],
   );
   if (!svc[0]) throw new AppError('Ese servicio ya no está disponible', 404);
-  const precio = precioPara(svc[0], b.tipoVehiculo);
-  if (precio === null) throw new AppError('Ese servicio no está disponible para ese tipo de vehículo', 400);
+  const precioLavado = precioPara(svc[0], b.tipoVehiculo);
+  if (precioLavado === null) throw new AppError('Ese servicio no está disponible para ese tipo de vehículo', 400);
+
+  // Fuera de la transacción a propósito: sólo lee el catálogo.
+  const adicionales = await resolverAdicionales(
+    { query: db.query } as never, tenantId, b.adicionales, b.tipoVehiculo,
+  );
+  const minutosTurno = (svc[0].estimated_minutes ?? 60) + sumaMinutos(adicionales);
+  const precioCentavos = getServicePrice(svc[0], b.tipoVehiculo) + sumaPrecio(adicionales);
+  const precio = centsToPesos(precioCentavos);
 
   const { hoy, dias } = diasDeLaVentana(cfg);
   if (!dias.includes(b.fecha)) throw new AppError('Ese día no se puede reservar', 400);
@@ -325,7 +365,7 @@ export async function reservar(req: Request, res: Response): Promise<void> {
     apertura: cfg.opening_time,
     cierre: cfg.closing_time,
     bahias: 1,
-    minutosServicio: svc[0].estimated_minutes ?? 60,
+    minutosServicio: minutosTurno,
     ocupados: [],
     ahora: b.fecha === hoy ? getMinutesOfDayInTimezone(cfg.timezone) : null,
   });
@@ -338,7 +378,7 @@ export async function reservar(req: Request, res: Response): Promise<void> {
     // aquí y, cuando le toca, ve el turno de la primera.
     await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`reservas:${tenantId}`]);
 
-    const horas = await horasDe(tenantId, cfg, b.fecha, hoy, svc[0].estimated_minutes ?? 60);
+    const horas = await horasDe(tenantId, cfg, b.fecha, hoy, minutosTurno);
     if (!horas.includes(b.hora)) {
       throw new AppError('Ese horario se acaba de ocupar. Elige otro, por favor.', 409, { codigo: 'HORARIO_OCUPADO' });
     }
@@ -431,8 +471,9 @@ export async function reservar(req: Request, res: Response): Promise<void> {
       `INSERT INTO appointments
          (tenant_id, customer_id, vehicle_id, service_id, scheduled_date, scheduled_time, price, notes, source)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'web') RETURNING id`,
-      [tenantId, customerId, vehicleId, b.servicioId, b.fecha, b.hora, getServicePrice(svc[0], b.tipoVehiculo), b.notas || null],
+      [tenantId, customerId, vehicleId, b.servicioId, b.fecha, b.hora, precioCentavos, b.notas || null],
     );
+    await guardarAdicionales(client, tenantId, turno[0].id, adicionales);
     await client.query(
       `INSERT INTO appointment_status_log (appointment_id, new_status, notes)
        VALUES ($1, 'pending', 'Creado desde la página de reservas')`,
@@ -446,6 +487,7 @@ export async function reservar(req: Request, res: Response): Promise<void> {
       ok: true,
       lavadero: cfg.name,
       servicio: svc[0].name,
+      adicionales: adicionales.map((a) => a.nombre),
       fecha: b.fecha,
       etiqueta: etiquetaDeDia(b.fecha, hoy),
       hora: b.hora,

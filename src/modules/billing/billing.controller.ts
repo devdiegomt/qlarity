@@ -160,6 +160,21 @@ export async function generateInvoice(req: Request, res: Response): Promise<void
     throw new AppError('Este pago ya tiene una factura generada', 409);
   }
 
+  // La factura se arma con el servicio principal: con adicionales saldría por
+  // menos de lo cobrado. Mejor no emitirla que emitir una factura equivocada
+  // ante la DIAN, hasta que la factura lleve una línea por adicional.
+  const { rows: extras } = await db.query<{ n: string }>(
+    'SELECT COUNT(*) AS n FROM appointment_extras WHERE appointment_id = $1',
+    [payment.appointment_id],
+  );
+  if (parseInt(extras[0].n, 10) > 0) {
+    throw new AppError(
+      'Este turno tiene servicios adicionales y la factura electrónica todavía no los incluye. Factúralo directamente en Alegra.',
+      409,
+      { codigo: 'FACTURA_CON_ADICIONALES' },
+    );
+  }
+
   // 2. Obtener tenant con config de facturación
   const { rows: tenantRows } = await db.query<TenantRow>(
     'SELECT * FROM tenants WHERE id = $1',

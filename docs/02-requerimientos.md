@@ -34,6 +34,7 @@ Nomenclatura: `RF-<módulo>-<n>`.
 | RF-TUR-8 | Cada lavadero tiene una página pública de reservas (`/reservar/:slug`): el cliente elige tipo de vehículo, servicio, día y hora libres, deja nombre, celular y placa, autoriza sus datos, y el turno entra a la agenda con `source = 'web'` | `/api/publico/lavaderos/:slug/reservas`, `reservas-web.test.ts`, `e2e/reservas.spec.ts` |
 | RF-TUR-9 | Los horarios ofrecidos respetan la hora de apertura y cierre, los días de cierre, la ventana de días (`booking_days_ahead`) y las bahías: el servicio tiene que terminar antes del cierre y no puede chocar con turnos que empiecen mientras dura | `horasLibres` en `reservas.ts` |
 | RF-TUR-10 | La página no recibe reservas si la suscripción está vencida o el plan llegó a su tope de turnos del mes; topes de 2 reservas pendientes por teléfono y 40 reservas web por día y lavadero | idem |
+| RF-TUR-11 | Un turno con adicionales tiene dos pasos dentro de «Lavando»: el lavado y, al marcarlo terminado, el adicional (el cliente encera acompañado por el operario asignado). El turno se marca listo al terminar el adicional | `PATCH /api/appointments/:id/adicional` |
 
 ### Clientes y vehículos
 
@@ -55,6 +56,7 @@ Nomenclatura: `RF-<módulo>-<n>`.
 | RF-SRV-2 | Un servicio tiene duración estimada, usada para calcular disponibilidad | `estimated_minutes` |
 | RF-SRV-3 | Un servicio se activa o desactiva sin borrarlo | `PATCH /:id/toggle` |
 | RF-SRV-4 | Calculadora pública de precios (`/calculadora`): insumos con precio y rendimiento, agua, pago al lavador (porcentaje o fijo), gastos fijos repartidos por lavado, y ganancia con una sugerida (25 %, rango 15 % a 35 %). Precio = costos / (1 − comisión − ganancia), redondeado a los mil pesos. Valores iniciales con precios comunes en Colombia (nov. 2026), documentados en `lib/calculadora.ts` | `calculadora.test.ts`, `e2e/calculadora.spec.ts` |
+| RF-SRV-5 | Un servicio puede ser **adicional** (p. ej. «Encera tú mismo»): no se reserva solo, se suma a un lavado desde el panel o la página de reservas. Su duración alarga lo que el turno ocupa la bahía y su precio se suma al total del turno (`appointments.price`); el turno guarda precio y minutos del momento (`appointment_extras`). El bot de WhatsApp no lo ofrece como lavado | `adicionales.test.ts`, `e2e/adicionales.spec.ts` |
 
 ### Pagos y facturación
 
@@ -319,6 +321,7 @@ un olvido:
 
 | Función | Por qué no está |
 |---|---|
+| Factura electrónica de un turno con adicionales | La factura de Alegra se arma con el servicio principal; con adicionales saldría por menos de lo cobrado. Se bloquea con un mensaje (facturar en Alegra) hasta que lleve una línea por adicional |
 | Cancelar o cambiar una reserva desde la página web | Sin verificar el teléfono (código por SMS/WhatsApp), cualquiera podría cancelar la reserva de otro. Por ahora se hace llamando al lavadero |
 | Verificar el celular en la página de reservas | Cuesta por mensaje y es otra integración. Lo compensan los topes por teléfono y por día. Ver docs/05-seguridad.md §3 |
 | Cancelar un turno desde WhatsApp | El flujo existe para agendar, no para cancelar. Requiere confirmar identidad antes de dejar cancelar |

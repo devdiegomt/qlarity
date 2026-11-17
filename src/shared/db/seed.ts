@@ -94,6 +94,14 @@ async function seed() {
         ($1, 'Solo Aspirado', 'Aspirado interior completo', 1500000, 2000000, 2000000, 0, 2000000, 20, 5)
     `, [tenantId]);
 
+    // Un adicional: no se reserva solo, se suma a un lavado. El cliente encera
+    // su carro acompañado por alguien del lavadero, después del lavado.
+    await cliente.query(`
+      INSERT INTO services (tenant_id, name, description, price_sedan, price_suv, price_camioneta, price_moto, price_pickup,
+                            estimated_minutes, sort_order, es_adicional)
+      VALUES ($1, 'Encera tú mismo', 'Al terminar el lavado, enceras tu carro con nuestros productos y alguien del equipo te acompaña', 2000000, 2500000, 2500000, 0, 2500000, 30, 6, true)
+    `, [tenantId]);
+
     // Clientes
     await cliente.query(`
       INSERT INTO customers (id, tenant_id, first_name, last_name, phone, email, document_type, document_number,

@@ -47,6 +47,8 @@ interface Datos {
   recibeReservas: boolean;
   tipos: Tipo[];
   servicios: Servicio[];
+  /** Se suman a un lavado («encera tú mismo»); no se reservan solos. */
+  adicionales?: Servicio[];
 }
 
 interface Dia {
@@ -57,6 +59,7 @@ interface Dia {
 
 interface Confirmada {
   servicio: string;
+  adicionales?: string[];
   etiqueta: string;
   fecha: string;
   hora: string;
@@ -90,6 +93,7 @@ export default function ReservarPage() {
 
   const [tipo, setTipo] = useState<Tipo | null>(null);
   const [servicioId, setServicioId] = useState<string | null>(null);
+  const [adicionalesSel, setAdicionalesSel] = useState<string[]>([]);
   const [dias, setDias] = useState<Dia[] | null>(null);
   const [errorDias, setErrorDias] = useState<string | null>(null);
   const [fecha, setFecha] = useState<string | null>(null);
@@ -125,10 +129,11 @@ export default function ReservarPage() {
 
   // Los horarios dependen sólo del servicio (de cuánto dura), no del tipo de
   // vehículo: se piden una vez por servicio, con todos los días de la ventana.
-  const cargarDias = (id: string) => {
+  const cargarDias = (id: string, extras: string[] = adicionalesSel) => {
     setDias(null);
     setErrorDias(null);
-    api<{ dias: Dia[] }>(`${base}/horarios?servicio=${id}`)
+    const q = extras.length ? `&adicionales=${extras.join(',')}` : '';
+    api<{ dias: Dia[] }>(`${base}/horarios?servicio=${id}${q}`)
       .then((r) => {
         setDias(r.dias);
         setFecha(r.dias[0]?.fecha ?? null);
@@ -136,17 +141,28 @@ export default function ReservarPage() {
       .catch((e: Error) => setErrorDias(e.message));
   };
 
+  // Un adicional alarga el turno, así que cambia qué horas caben: se vuelven a
+  // pedir al elegir servicio y al marcar o desmarcar un adicional.
   useEffect(() => {
     setFecha(null);
     setHora(null);
-    if (servicioId) cargarDias(servicioId);
-  }, [servicioId]);
+    if (servicioId) cargarDias(servicioId, adicionalesSel);
+  }, [servicioId, adicionalesSel.join(',')]);
 
   const elegirTipo = (t: Tipo) => {
     setTipo(t);
     // Si el servicio elegido no se ofrece para este tipo, se deselecciona.
     if (servicio && servicio.precios[t] === null) setServicioId(null);
+    // Igual con los adicionales.
+    setAdicionalesSel((l) => l.filter((id) => datos?.adicionales?.find((a) => a.id === id)?.precios[t] != null));
   };
+
+  const adicionalesOfrecidos = (datos?.adicionales ?? []).filter((a) => tipo && a.precios[tipo] !== null);
+  const adicionalesElegidos = adicionalesOfrecidos.filter((a) => adicionalesSel.includes(a.id));
+  const total =
+    tipo && servicio
+      ? (servicio.precios[tipo] ?? 0) + adicionalesElegidos.reduce((t, a) => t + (a.precios[tipo] ?? 0), 0)
+      : 0;
 
   const dia = dias?.find((d) => d.fecha === fecha) ?? null;
   const listoParaDatos = Boolean(tipo && servicio && fecha && hora);
@@ -166,6 +182,7 @@ export default function ReservarPage() {
         body: {
           autorizaDatos: true,
           servicioId: servicio.id,
+          adicionales: adicionalesElegidos.map((a) => a.id),
           tipoVehiculo: tipo,
           fecha,
           hora,
@@ -239,6 +256,9 @@ export default function ReservarPage() {
         <p className="text-gray-600 mt-2">Te esperamos en {lav.nombre}.</p>
         <dl className="mt-6 bg-white border border-gray-100 rounded-xl divide-y divide-gray-100 text-sm">
           <Fila t="Servicio" v={confirmada.servicio} />
+          {confirmada.adicionales && confirmada.adicionales.length > 0 && (
+            <Fila t="Adicionales" v={confirmada.adicionales.join(', ')} />
+          )}
           <Fila t="Cuándo" v={`${confirmada.etiqueta}, ${hora12(confirmada.hora)}`} />
           <Fila t="Placa" v={<span className="font-mono">{confirmada.placa}</span>} />
           <Fila t="Precio" v={pesos(confirmada.precio)} />
@@ -319,6 +339,39 @@ export default function ReservarPage() {
           </Paso>
         )}
 
+        {tipo && servicio && adicionalesOfrecidos.length > 0 && (
+          <section aria-labelledby="adicionales-titulo" className="-mt-4">
+            <h3 id="adicionales-titulo" className="text-sm font-semibold text-gray-900 mb-2">¿Quieres agregar algo?</h3>
+            <div className="space-y-2">
+              {adicionalesOfrecidos.map((a) => (
+                <label
+                  key={a.id}
+                  className={`flex items-start gap-3 rounded-xl border p-4 cursor-pointer transition ${
+                    adicionalesSel.includes(a.id) ? 'border-brand-600 bg-brand-50' : 'border-gray-200 bg-white hover:border-gray-300'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={adicionalesSel.includes(a.id)}
+                    onChange={(e) =>
+                      setAdicionalesSel((l) => (e.target.checked ? [...l, a.id] : l.filter((x) => x !== a.id)))
+                    }
+                    className="mt-1 h-4 w-4 shrink-0"
+                  />
+                  <span className="flex-1 min-w-0">
+                    <span className="flex items-baseline justify-between gap-3">
+                      <span className="font-semibold text-gray-900">{a.nombre}</span>
+                      <span className="font-mono text-sm text-gray-900 whitespace-nowrap">+{pesos(a.precios[tipo] ?? 0)}</span>
+                    </span>
+                    {a.descripcion && <span className="block text-sm text-gray-600 mt-1">{a.descripcion}</span>}
+                    <span className="block text-xs text-gray-500 mt-2">+{duracion(a.minutos)}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </section>
+        )}
+
         {tipo && servicio && (
           <Paso n={3} titulo="¿Cuándo?">
             {errorDias && <p role="alert" className="text-sm text-red-700">{errorDias}</p>}
@@ -397,11 +450,14 @@ export default function ReservarPage() {
                 Autorizo a {lav.nombre} a guardar mis datos para agendar y atender mi servicio.
               </CasillaAutorizacion>
 
-              <div className="bg-white border border-gray-100 rounded-xl p-4 text-sm">
+              <div className="bg-white border border-gray-100 rounded-xl p-4 text-sm" data-testid="resumen">
                 <p className="etiqueta text-gray-500 mb-2">Tu reserva</p>
                 <p className="text-gray-900 font-semibold">{servicio.nombre} · {NOMBRE_TIPO[tipo]}</p>
+                {adicionalesElegidos.length > 0 && (
+                  <p className="text-gray-700 mt-1">+ {adicionalesElegidos.map((a) => a.nombre).join(', ')}</p>
+                )}
                 <p className="text-gray-700 mt-1">{dia?.etiqueta}, {hora && hora12(hora)}</p>
-                <p className="font-mono text-gray-900 mt-1">{pesos(servicio.precios[tipo] ?? 0)}</p>
+                <p className="font-mono text-gray-900 mt-1">{pesos(total)}</p>
               </div>
 
               {error && (

@@ -46,11 +46,11 @@ export async function getAppointmentStatus(req: Request, res: Response): Promise
 
 export async function getServices(req: Request, res: Response): Promise<void> {
   const { rows } = await db.query<Pick<ServiceRow,
-    'id' | 'name' | 'description' | 'price_sedan' | 'price_suv' | 'price_camioneta' | 'price_moto' | 'price_pickup' | 'estimated_minutes'
+    'id' | 'name' | 'description' | 'price_sedan' | 'price_suv' | 'price_camioneta' | 'price_moto' | 'price_pickup' | 'estimated_minutes' | 'es_adicional'
   >>(
     `SELECT id, name, description,
             price_sedan, price_suv, price_camioneta, price_moto, price_pickup,
-            estimated_minutes
+            estimated_minutes, es_adicional
      FROM services
      WHERE tenant_id = $1 AND is_active = true
      ORDER BY sort_order ASC, name ASC`,
@@ -135,7 +135,7 @@ export async function bookAppointment(req: Request, res: Response): Promise<void
     // El precio depende del tipo de vehículo (price_sedan, price_suv, ...).
     const { rows: svc } = await client.query<Record<string, number>>(
       `SELECT price_sedan, price_suv, price_camioneta, price_moto, price_pickup
-       FROM services WHERE id = $1 AND tenant_id = $2 AND is_active = true LIMIT 1`,
+       FROM services WHERE id = $1 AND tenant_id = $2 AND is_active = true AND NOT es_adicional LIMIT 1`,
       [serviceId, req.tenantId],
     );
     if (!svc[0]) {

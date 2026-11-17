@@ -58,6 +58,7 @@ interface ServiceRaw extends Service {
   price_camioneta?: number;
   price_moto?: number;
   price_pickup?: number;
+  es_adicional?: boolean;
   estimated_minutes?: number;
 }
 
@@ -92,6 +93,8 @@ export default function QuickTurnModal({ onClose, onCreated }: QuickTurnModalPro
   // antes de que llegue el error.
   const [autoriza, setAutoriza]               = useState(false);
   const [pedirAutorizacion, setPedirAutorizacion] = useState(false);
+  // Adicionales («encera tú mismo») marcados para este turno.
+  const [adicionales, setAdicionales] = useState<string[]>([]);
   const { user } = useAuth();
 
   // Load services on mount
@@ -133,14 +136,20 @@ export default function QuickTurnModal({ onClose, onCreated }: QuickTurnModalPro
     }
   };
 
-  // Get selected service price for display
-  const getSelectedServicePrice = (): number => {
-    const svc = services.find((s) => s.id === form.serviceId);
+  const precioDe = (svc: ServiceRaw | undefined): number => {
     if (!svc) return 0;
     const vType = existingVehicle?.vehicle_type ?? form.vehicleType;
     const key = `price_${vType}` as PriceKey;
     return svc[key] ?? svc.price_sedan ?? svc.priceSedan ?? 0;
   };
+  const lavados = services.filter((s) => !s.es_adicional);
+  // Un adicional sin precio para este tipo de vehículo no se ofrece.
+  const ofrecidos = services.filter((s) => s.es_adicional && precioDe(s) > 0);
+  const elegidos = ofrecidos.filter((s) => adicionales.includes(s.id));
+
+  // El total del turno: el lavado más los adicionales marcados.
+  const getSelectedServicePrice = (): number =>
+    precioDe(services.find((s) => s.id === form.serviceId)) + elegidos.reduce((t, s) => t + precioDe(s), 0);
 
   // Submit
   const handleSubmit = async () => {
@@ -160,6 +169,7 @@ export default function QuickTurnModal({ onClose, onCreated }: QuickTurnModalPro
           model:             form.model,
           color:             form.color,
           serviceId:         form.serviceId,
+          adicionales:       elegidos.map((s) => s.id),
           assignedTo:        form.assignedTo || undefined,
           bayNumber:         form.bayNumber ? parseInt(form.bayNumber, 10) : undefined,
           scheduledTime:     form.scheduledTime || undefined,
@@ -292,7 +302,7 @@ export default function QuickTurnModal({ onClose, onCreated }: QuickTurnModalPro
 
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Selecciona el servicio</p>
               <div className="space-y-2">
-                {services.map((svc) => {
+                {lavados.map((svc) => {
                   const vType = (existingVehicle?.vehicle_type ?? form.vehicleType) as VehicleType;
                   const key = `price_${vType}` as PriceKey;
                   const price = svc[key] ?? svc.price_sedan ?? 0;
@@ -319,6 +329,29 @@ export default function QuickTurnModal({ onClose, onCreated }: QuickTurnModalPro
                 })}
               </div>
 
+              {ofrecidos.length > 0 && form.serviceId && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Adicionales</p>
+                  {ofrecidos.map((svc) => (
+                    <label key={svc.id} className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 cursor-pointer hover:border-gray-200">
+                      <input
+                        type="checkbox"
+                        checked={adicionales.includes(svc.id)}
+                        onChange={(e) =>
+                          setAdicionales((l) => (e.target.checked ? [...l, svc.id] : l.filter((x) => x !== svc.id)))
+                        }
+                        className="h-4 w-4 shrink-0"
+                      />
+                      <span className="flex-1 min-w-0">
+                        <span className="block font-semibold text-sm text-gray-900">{svc.name}</span>
+                        <span className="block text-xs text-gray-500">+{svc.estimated_minutes ?? svc.estimatedMinutes} min</span>
+                      </span>
+                      <span className="font-semibold text-brand-700 text-sm">+{formatCOP(precioDe(svc))}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+
               <button
                 onClick={() => {
                   if (!form.serviceId) { setError('Selecciona un servicio'); return; }
@@ -342,6 +375,7 @@ export default function QuickTurnModal({ onClose, onCreated }: QuickTurnModalPro
                 <SummaryRow label="Cliente" value={`${form.customerFirstName} ${form.customerLastName} — ${form.customerPhone}`} />
                 <SummaryRow label="Vehículo" value={`${form.brand || ''} ${form.model || ''} (${existingVehicle?.vehicle_type ?? form.vehicleType})`} />
                 <SummaryRow label="Servicio" value={services.find((s) => s.id === form.serviceId)?.name ?? ''} />
+                {elegidos.length > 0 && <SummaryRow label="Adicionales" value={elegidos.map((s) => s.name).join(', ')} />}
                 <SummaryRow label="Precio" value={formatCOP(getSelectedServicePrice())} bold />
               </div>
 
