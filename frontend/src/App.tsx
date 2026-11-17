@@ -10,6 +10,7 @@ import SignupPage from './pages/SignupPage';
 import PoliticaPrivacidadPage from './pages/PoliticaPrivacidadPage';
 import AvisoLavaderoPage from './pages/AvisoLavaderoPage';
 import ReservarPage from './pages/ReservarPage';
+import CalculadoraPage from './pages/CalculadoraPage';
 import DashboardPage from './pages/DashboardPage';
 import AppointmentsPage from './pages/AppointmentsPage';
 import BoardPage from './pages/BoardPage';
@@ -38,6 +39,8 @@ function AppRoutes() {
       <Route path="/privacidad/:slug" element={<AvisoLavaderoPage />} />
       {/* La página de reservas de cada lavadero, para sus clientes. */}
       <Route path="/reservar/:slug" element={<ReservarPage />} />
+      {/* Para dueños que están empezando: cuánto cobrar por un servicio. */}
+      <Route path="/calculadora" element={<CalculadoraPage />} />
 
       {/* App del tenant */}
       <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>

@@ -318,8 +318,13 @@ function ServicesTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <p className="text-sm text-gray-500">{services.length} servicios</p>
+      <div className="flex justify-between items-center gap-3 flex-wrap">
+        <p className="text-sm text-gray-500">
+          {services.length} servicios ·{' '}
+          <a href="/calculadora" target="_blank" rel="noopener" className="text-brand-700 hover:text-brand-800 font-semibold">
+            ¿No sabes cuánto cobrar? Usa la calculadora
+          </a>
+        </p>
         <button
           onClick={openNew}
           className="bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition"
