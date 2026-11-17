@@ -1,3 +1,7 @@
+import { inicioDeEspera } from "../lib/fechas";
+import EtiquetaWeb from "../components/EtiquetaWeb";
+import { useProximas } from "../components/ProximasReservas";
+import { Link } from "react-router-dom";
 import { ESTADOS, PastillaEstado, Placa, PuntoEstado } from "../lib/estados";
 import { Clock, RotateCw, X } from 'lucide-react';
 import {
@@ -30,6 +34,7 @@ interface BoardAppointment {
   estimated_minutes: number;
   bay_number: number | null;
   assigned_to: string | null;
+  scheduled_date: string;
   scheduled_time: string | null;
   started_at: string | null;
   created_at: string;
@@ -211,6 +216,7 @@ export default function BoardPage() {
           <p className="text-sm text-gray-500">
             {activeCount} activos · {deliveredCount} entregados hoy
           </p>
+          <AvisoProximas />
         </div>
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
@@ -381,7 +387,10 @@ function KanbanCard({
     >
       {/* Top row: plate + elapsed */}
       <div className="flex items-center justify-between mb-1">
-        <Placa placa={a.plate} />
+        <span className="flex items-center gap-1.5">
+          <Placa placa={a.plate} />
+          <EtiquetaWeb source={a.source} />
+        </span>
         {elapsed && (a.status === "pending" || a.status === "in_progress") && (
           <span
             className={`font-mono text-xs tabular-nums ${
@@ -684,15 +693,10 @@ function InfoRow({ label, value, bold }: InfoRowProps) {
 function getElapsedTime(
   appointment: BoardAppointment | AppointmentDetail,
 ): string | null {
-  const start =
-    appointment.status === "in_progress"
-      ? appointment.started_at
-      : appointment.status === "pending"
-        ? appointment.created_at
-        : null;
+  const start = inicioDeEspera(appointment);
   if (!start) return null;
 
-  const mins = Math.floor((Date.now() - new Date(start).getTime()) / 60_000);
+  const mins = Math.floor((Date.now() - start.getTime()) / 60_000);
   if (mins < 1) return "ahora";
   if (mins < 60) return `${mins} min`;
   const h = Math.floor(mins / 60);
@@ -706,4 +710,20 @@ function isOvertimeCheck(appointment: BoardAppointment): boolean {
   const elapsed =
     (Date.now() - new Date(appointment.started_at).getTime()) / 60_000;
   return elapsed > appointment.estimated_minutes;
+}
+
+/**
+ * El tablero es de hoy; esto avisa que hay reservas para los próximos días y
+ * lleva a verlas. Sin el aviso, una reserva web para mañana no se veía acá.
+ */
+function AvisoProximas() {
+  const lista = useProximas();
+  if (!lista || lista.length === 0) return null;
+  const web = lista.filter((t) => t.source === "web").length;
+  return (
+    <Link to="/" className="inline-block mt-1 text-sm text-brand-700 hover:text-brand-800 font-medium">
+      {lista.length} {lista.length === 1 ? "reserva" : "reservas"} para los próximos días
+      {web > 0 ? ` (${web} web)` : ""} →
+    </Link>
+  );
 }

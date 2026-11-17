@@ -1,5 +1,8 @@
 import { ESTADOS, PastillaEstado, Placa, PuntoEstado } from "../lib/estados";
-import { CalendarDays } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useSearchParams } from "react-router-dom";
+import { etiquetaDia, fechaLocal, inicioDeEspera, sumarDias } from "../lib/fechas";
+import EtiquetaWeb from "../components/EtiquetaWeb";
 import { useState, useEffect, useCallback } from "react";
 import { api } from "../lib/api";
 import { formatCOP, formatTime } from "../lib/format";
@@ -22,7 +25,9 @@ interface Appointment {
   service_name: string;
   price: number;
   estimated_minutes: number;
+  scheduled_date: string;
   scheduled_time: string | null;
+  source: string;
   bay_number: number | null;
   started_at: string | null;
   created_at: string;
@@ -35,9 +40,13 @@ export default function AppointmentsPage() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<string>(
-    () => new Date().toISOString().split("T")[0],
-  );
+  // La fecha va en la URL (?fecha=), para que «Próximas reservas» pueda
+  // enlazar a un día; sin ella, hoy **en la hora del celular** (ver fechas.ts).
+  const [params, setParams] = useSearchParams();
+  const pedida = params.get("fecha");
+  const selectedDate = pedida && /^\d{4}-\d{2}-\d{2}$/.test(pedida) ? pedida : fechaLocal();
+  const setSelectedDate = (f: string) =>
+    setParams(f === fechaLocal() ? {} : { fecha: f }, { replace: true });
   const toast = useToast();
 
   const fetchAppointments = useCallback(async () => {
@@ -82,7 +91,7 @@ export default function AppointmentsPage() {
     fetchAppointments();
   };
 
-  const isToday = selectedDate === new Date().toISOString().split("T")[0];
+  const isToday = selectedDate === fechaLocal();
 
   return (
     <div className="space-y-4">
@@ -91,11 +100,38 @@ export default function AppointmentsPage() {
         <div>
           <h1 className="text-xl font-semibold text-gray-900">Agenda</h1>
           <p className="text-sm text-gray-500">
-            {appointments.length} turnos{" "}
-            {isToday ? "hoy" : `el ${selectedDate}`}
+            {appointments.length} {appointments.length === 1 ? "turno" : "turnos"} ·{" "}
+            {etiquetaDia(selectedDate)}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center">
+            <button
+              type="button"
+              onClick={() => setSelectedDate(sumarDias(selectedDate, -1))}
+              aria-label="Día anterior"
+              className="p-2 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition"
+            >
+              <ChevronLeft size={18} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedDate(sumarDias(selectedDate, 1))}
+              aria-label="Día siguiente"
+              className="p-2 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition"
+            >
+              <ChevronRight size={18} aria-hidden="true" />
+            </button>
+          </div>
+          {!isToday && (
+            <button
+              type="button"
+              onClick={() => setSelectedDate(fechaLocal())}
+              className="text-sm text-brand-700 hover:text-brand-800 font-semibold px-2 py-2"
+            >
+              Hoy
+            </button>
+          )}
           <input
             title="Seleccionar fecha para ver los turnos programados"
             type="date"
@@ -207,14 +243,9 @@ function AppointmentCard({
 
   // Tiempo transcurrido en estado actual
   const getElapsed = (): string | null => {
-    const start =
-      a.status === "in_progress"
-        ? a.started_at
-        : a.status === "pending"
-          ? a.created_at
-          : null;
+    const start = inicioDeEspera(a);
     if (!start) return null;
-    const mins = Math.floor((Date.now() - new Date(start).getTime()) / 60_000);
+    const mins = Math.floor((Date.now() - start.getTime()) / 60_000);
     if (mins < 60) return `${mins} min`;
     return `${Math.floor(mins / 60)}h ${mins % 60}m`;
   };
@@ -228,6 +259,7 @@ function AppointmentCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
             <PastillaEstado status={a.status} />
+            <EtiquetaWeb source={a.source} />
             {a.scheduled_time && (
               <span className="font-mono text-xs text-gray-500">
                 {formatTime(a.scheduled_time)}

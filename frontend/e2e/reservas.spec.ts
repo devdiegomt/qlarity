@@ -23,8 +23,10 @@ test.describe('con el backend', () => {
     await page.getByRole('radio', { name: /Lavado Completo/ }).click();
     await expect(page.getByRole('radio', { name: /Lavado Completo/ })).toContainText('$40.000');
 
-    // El primer día con cupo queda elegido; se toma la última hora para no
-    // chocar con lo que dejen otras pruebas.
+    // El último día de la ventana: así la reserva no es para hoy y tiene que
+    // aparecer en «Próximas reservas». La última hora, para no chocar con lo
+    // que dejen otras pruebas.
+    await page.getByRole('radiogroup', { name: 'Día' }).getByRole('radio').last().click();
     const horas = page.getByRole('radiogroup', { name: 'Hora' }).getByRole('radio');
     await expect(horas.first()).toBeVisible();
     await horas.last().click();
@@ -45,6 +47,17 @@ test.describe('con el backend', () => {
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('¡Listo, quedó reservado!');
     await expect(page.locator('dl')).toContainText(p);
     await expect(page.locator('dl')).toContainText('Lavado Completo');
+
+    // Y el lavadero la ve: en Inicio, en «Próximas reservas», marcada como web.
+    // Antes no aparecía en ningún lado: el tablero sólo muestra hoy.
+    await entrar(page);
+    const proximas = page.locator('section', { has: page.getByRole('heading', { name: /Próximas reservas/ }) });
+    const fila = proximas.locator('li', { hasText: p });
+    await expect(fila).toBeVisible();
+    await expect(fila).toContainText('Web');
+
+    await page.goto('/board');
+    await expect(page.getByRole('link', { name: /para los próximos días/ })).toBeVisible();
   });
 
   test('un servicio sin precio para ese tipo de vehículo no se puede elegir', async ({ page }) => {
