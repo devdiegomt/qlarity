@@ -54,6 +54,7 @@ Nomenclatura: `RF-<módulo>-<n>`.
 | RF-SRV-1 | Cada servicio tiene precio por tipo de vehículo: sedán, SUV, camioneta, moto, pickup | `services.price_*` |
 | RF-SRV-2 | Un servicio tiene duración estimada, usada para calcular disponibilidad | `estimated_minutes` |
 | RF-SRV-3 | Un servicio se activa o desactiva sin borrarlo | `PATCH /:id/toggle` |
+| RF-SRV-4 | Calculadora pública de precios (`/calculadora`): insumos con precio y rendimiento, agua, pago al lavador (porcentaje o fijo), gastos fijos repartidos por lavado, y ganancia con una sugerida (25 %, rango 15 % a 35 %). Precio = costos / (1 − comisión − ganancia), redondeado a los mil pesos. Valores iniciales con precios comunes en Colombia (nov. 2026), documentados en `lib/calculadora.ts` | `calculadora.test.ts`, `e2e/calculadora.spec.ts` |
 
 ### Pagos y facturación
 
