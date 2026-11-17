@@ -378,6 +378,23 @@ export async function reservar(req: Request, res: Response): Promise<void> {
     // aquí y, cuando le toca, ve el turno de la primera.
     await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`reservas:${tenantId}`]);
 
+    // El tope por teléfono va antes que el horario: si el número ya tiene sus
+    // reservas pendientes, elegir otra hora no le sirve, y decirle «se ocupó»
+    // lo manda a probar horas en vano.
+    const { rows: pend } = await client.query<{ n: string }>(
+      `SELECT COUNT(*) AS n FROM appointments a JOIN customers c ON c.id = a.customer_id
+        WHERE a.tenant_id = $1 AND c.phone = $2 AND c.deleted_at IS NULL
+          AND a.status = 'pending' AND a.scheduled_date >= $3::date`,
+      [tenantId, b.telefono, hoy],
+    );
+    if (parseInt(pend[0].n, 10) >= MAX_PENDIENTES_POR_TELEFONO) {
+      throw new AppError(
+        `Ese número ya tiene ${MAX_PENDIENTES_POR_TELEFONO} reservas pendientes. Para cambiarlas o agregar otra, comunícate con el lavadero.`,
+        409,
+        { codigo: 'TOPE_TELEFONO' },
+      );
+    }
+
     const horas = await horasDe(tenantId, cfg, b.fecha, hoy, minutosTurno);
     if (!horas.includes(b.hora)) {
       throw new AppError('Ese horario se acaba de ocupar. Elige otro, por favor.', 409, { codigo: 'HORARIO_OCUPADO' });
@@ -425,20 +442,6 @@ export async function reservar(req: Request, res: Response): Promise<void> {
     if (existentes[0]) {
       customerId = existentes[0].id;
       await registrarAutorizacion(tenantId, customerId, aut, client.query.bind(client) as typeof db.query);
-
-      const { rows: pend } = await client.query<{ n: string }>(
-        `SELECT COUNT(*) AS n FROM appointments
-          WHERE tenant_id = $1 AND customer_id = $2
-            AND status = 'pending' AND scheduled_date >= $3::date`,
-        [tenantId, customerId, hoy],
-      );
-      if (parseInt(pend[0].n, 10) >= MAX_PENDIENTES_POR_TELEFONO) {
-        throw new AppError(
-          `Ese número ya tiene ${MAX_PENDIENTES_POR_TELEFONO} reservas pendientes. Para cambiarlas o agregar otra, comunícate con el lavadero.`,
-          409,
-          { codigo: 'TOPE_TELEFONO' },
-        );
-      }
     } else {
       const { rows } = await client.query<{ id: string }>(
         `INSERT INTO customers (tenant_id, first_name, last_name, phone, consent_at, consent_version, consent_source)

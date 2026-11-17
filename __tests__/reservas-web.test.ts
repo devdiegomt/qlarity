@@ -200,12 +200,18 @@ describe('reservar', () => {
   });
 
   it(`un mismo teléfono no puede tener más de ${MAX_PENDIENTES_POR_TELEFONO} reservas pendientes`, async () => {
-    const [dia] = await diasPara(completo.id);
+    // Último día y horas del final: el primer día lo llenan otras suites que
+    // corren en paralelo (el bot reserva la primera hora), y la primera hora
+    // del último día la usa adicionales.test.ts. Ver cuposLibres.
+    const dia = await ultimoDia(completo.id);
+    const horas = dia.horas.slice(-3);
     for (let i = 0; i < MAX_PENDIENTES_POR_TELEFONO; i++) {
-      const r = await request(app).post(BASE).send(reserva({ fecha: dia.fecha, hora: dia.horas[i], placa: PLACAS[i] }));
+      const r = await request(app).post(BASE).send(reserva({ fecha: dia.fecha, hora: horas[i], placa: PLACAS[i] }));
       expect(r.status).toBe(201);
     }
-    const res = await request(app).post(BASE).send(reserva({ fecha: dia.fecha, hora: dia.horas[2], placa: PLACAS[2] }));
+    // La tercera recibe el tope por teléfono aunque la hora esté libre u ocupada:
+    // se revisa antes que el horario.
+    const res = await request(app).post(BASE).send(reserva({ fecha: dia.fecha, hora: horas[2], placa: PLACAS[2] }));
     expect(res.status).toBe(409);
     expect(res.body.details?.codigo ?? res.body.codigo).toBe('TOPE_TELEFONO');
   });
