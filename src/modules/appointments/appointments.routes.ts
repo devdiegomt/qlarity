@@ -15,6 +15,7 @@ router.get('/:id',      validateId, asyncHandler(ctrl.getById));
 router.post('/',        planLimit('appointments'), validate(schemas.appointmentCreate), asyncHandler(ctrl.create));
 router.patch('/:id',    validateId, asyncHandler(ctrl.update));
 router.patch('/:id/status', validateId, validate(schemas.statusChange), asyncHandler(ctrl.changeStatus));
+router.patch('/:id/adicional', validateId, asyncHandler(ctrl.empezarAdicional));
 router.post('/quick',   planLimit('appointments'), validate(schemas.appointmentQuick), asyncHandler(ctrl.quickCreate));
 
 export default router;

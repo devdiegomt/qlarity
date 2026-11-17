@@ -5,6 +5,7 @@ import * as db from '../../shared/db';
 import { AppError } from '../../shared/middleware/errorHandler';
 import { getServicePrice } from '../../shared/utils/pricing';
 import { getTenantToday } from '../../shared/utils/dateUtils';
+import { COLUMNAS_ADICIONALES, guardarAdicionales, resolverAdicionales, sumaPrecio } from './adicionales';
 import {
   VALID_TRANSITIONS,
   type AppointmentRow,
@@ -26,7 +27,8 @@ const APPOINTMENT_SELECT = `
          c.first_name AS customer_first_name, c.last_name AS customer_last_name, c.phone AS customer_phone,
          v.plate, v.vehicle_type, v.brand, v.model, v.color,
          s.name AS service_name, s.estimated_minutes,
-         u.first_name AS operator_first_name, u.last_name AS operator_last_name
+         u.first_name AS operator_first_name, u.last_name AS operator_last_name,
+         ${COLUMNAS_ADICIONALES}
   FROM appointments a
   JOIN customers c ON c.id = a.customer_id
   JOIN vehicles  v ON v.id = a.vehicle_id
@@ -84,6 +86,34 @@ export async function today(req: Request, res: Response): Promise<void> {
     [req.tenantId, todayDate],
   );
   res.json(rows);
+}
+
+// ─── PATCH /api/appointments/:id/adicional ────────────────────────────────────
+
+/**
+ * Terminó el lavado y empieza el adicional (p. ej. el cliente encera su carro,
+ * acompañado). Sólo para un turno en lavado que tenga adicionales; se puede
+ * marcar una vez. Después el turno se marca listo como cualquier otro.
+ */
+export async function empezarAdicional(req: Request, res: Response): Promise<void> {
+  const { rows } = await db.query<{ id: string }>(
+    `UPDATE appointments a SET adicional_iniciado_at = NOW(), updated_at = NOW()
+      WHERE a.id = $1 AND a.tenant_id = $2 AND a.status = 'in_progress'
+        AND a.adicional_iniciado_at IS NULL
+        AND EXISTS (SELECT 1 FROM appointment_extras e WHERE e.appointment_id = a.id)
+      RETURNING a.id`,
+    [req.params.id, req.tenantId],
+  );
+  if (rows.length === 0) {
+    throw new AppError('Este turno no está en lavado, no tiene adicionales o ya los empezó', 409);
+  }
+  await db.query(
+    `INSERT INTO appointment_status_log (appointment_id, previous_status, new_status, changed_by, notes)
+     VALUES ($1, 'in_progress', 'in_progress', $2, 'Terminó el lavado; empieza el adicional')`,
+    [req.params.id, req.user!.id],
+  );
+  const { rows: full } = await db.query(`${APPOINTMENT_SELECT} WHERE a.id = $1`, [req.params.id]);
+  res.json(full[0]);
 }
 
 // ─── GET /api/appointments/proximas ───────────────────────────────────────────
@@ -300,7 +330,7 @@ export async function quickCreate(req: Request, res: Response): Promise<void> {
   const {
     customerPhone, customerFirstName, customerLastName,
     plate, vehicleType, brand, model, color,
-    serviceId, scheduledTime, assignedTo, bayNumber, notes, autorizaDatos,
+    serviceId, scheduledTime, assignedTo, bayNumber, notes, autorizaDatos, adicionales: idsAdicionales,
   } = req.body as AppointmentQuickBody;
 
   const client = await db.getClient();
@@ -377,7 +407,10 @@ export async function quickCreate(req: Request, res: Response): Promise<void> {
       'SELECT vehicle_type FROM vehicles WHERE id = $1',
       [vehicleId],
     );
-    const price = getServicePrice(serviceRows[0], vehRows[0].vehicle_type as never);
+    const tipo = vehRows[0].vehicle_type as never;
+    const adicionales = await resolverAdicionales(client, req.tenantId!, idsAdicionales ?? [], tipo);
+    // El precio del turno es el total: lavado más adicionales.
+    const price = getServicePrice(serviceRows[0], tipo) + sumaPrecio(adicionales);
 
     // 4. Crear turno
     const todayDate = await getTenantToday(req.tenantId!);
@@ -390,6 +423,8 @@ export async function quickCreate(req: Request, res: Response): Promise<void> {
        scheduledTime ?? null, assignedTo ?? null, bayNumber ?? null,
        price, notes?.trim() ?? null],
     );
+
+    await guardarAdicionales(client, req.tenantId!, appointment[0].id, adicionales);
 
     await client.query(
       `INSERT INTO appointment_status_log (appointment_id, new_status, changed_by)

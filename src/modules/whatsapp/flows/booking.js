@@ -202,7 +202,8 @@ async function handle(ctx) {
 
       // Cargar servicios activos
       const { rows: services } = await db.query(
-        'SELECT * FROM services WHERE tenant_id = $1 AND is_active = true ORDER BY sort_order, name',
+        // Los adicionales («encera tú mismo») no se agendan solos.
+        'SELECT * FROM services WHERE tenant_id = $1 AND is_active = true AND NOT es_adicional ORDER BY sort_order, name',
         [tenant.id]
       );
 
@@ -413,7 +414,8 @@ async function handle(ctx) {
 
       // Cargar servicios
       const { rows: services } = await db.query(
-        'SELECT * FROM services WHERE tenant_id = $1 AND is_active = true ORDER BY sort_order, name',
+        // Los adicionales («encera tú mismo») no se agendan solos.
+        'SELECT * FROM services WHERE tenant_id = $1 AND is_active = true AND NOT es_adicional ORDER BY sort_order, name',
         [tenant.id]
       );
 

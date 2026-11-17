@@ -120,6 +120,7 @@ export interface ServiceRow {
   price_camioneta: number;
   price_moto: number;
   price_pickup: number;
+  es_adicional: boolean;
   estimated_minutes: number;
   is_active: boolean;
   sort_order: number;

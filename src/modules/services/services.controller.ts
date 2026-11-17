@@ -8,7 +8,7 @@ const FIELD_MAP: Record<string, keyof ServiceRow> = {
   name: 'name', description: 'description',
   priceSedan: 'price_sedan', priceSuv: 'price_suv',
   priceCamioneta: 'price_camioneta', priceMoto: 'price_moto', pricePickup: 'price_pickup',
-  estimatedMinutes: 'estimated_minutes', sortOrder: 'sort_order',
+  estimatedMinutes: 'estimated_minutes', sortOrder: 'sort_order', esAdicional: 'es_adicional',
 };
 
 // ─── GET /api/services ────────────────────────────────────────────────────────
@@ -39,15 +39,15 @@ export async function getById(req: Request, res: Response): Promise<void> {
 
 export async function create(req: Request, res: Response): Promise<void> {
   const { name, description, priceSedan, priceSuv, priceCamioneta, priceMoto, pricePickup,
-          estimatedMinutes, sortOrder } = req.body as ServiceCreateBody;
+          estimatedMinutes, sortOrder, esAdicional } = req.body as ServiceCreateBody;
 
   const { rows } = await db.query<ServiceRow>(
     `INSERT INTO services
-       (tenant_id, name, description, price_sedan, price_suv, price_camioneta, price_moto, price_pickup, estimated_minutes, sort_order)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+       (tenant_id, name, description, price_sedan, price_suv, price_camioneta, price_moto, price_pickup, estimated_minutes, sort_order, es_adicional)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
     [req.tenantId, name.trim(), description?.trim() ?? null,
      priceSedan ?? 0, priceSuv ?? 0, priceCamioneta ?? 0, priceMoto ?? 0, pricePickup ?? 0,
-     estimatedMinutes ?? 60, sortOrder ?? 0],
+     estimatedMinutes ?? 60, sortOrder ?? 0, esAdicional ?? false],
   );
 
   res.status(201).json(rows[0]);

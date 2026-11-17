@@ -39,6 +39,7 @@ interface Service {
   estimated_minutes: number;
   sort_order: number;
   is_active: boolean;
+  es_adicional: boolean;
 }
 
 interface User {
@@ -240,12 +241,13 @@ interface ServiceForm {
   pricePickup:    string;
   estimatedMinutes: number | string;
   sortOrder:        number | string;
+  esAdicional:      boolean;
 }
 
 const emptyServiceForm = (): ServiceForm => ({
   name: '', description: '',
   priceSedan: '', priceSuv: '', priceCamioneta: '', priceMoto: '', pricePickup: '',
-  estimatedMinutes: 60, sortOrder: 0,
+  estimatedMinutes: 60, sortOrder: 0, esAdicional: false,
 });
 
 function ServicesTab() {
@@ -279,6 +281,7 @@ function ServicesTab() {
       pricePickup:    String(s.price_pickup / 100),
       estimatedMinutes: s.estimated_minutes,
       sortOrder:        s.sort_order,
+      esAdicional:      s.es_adicional,
     });
     setShowForm(true);
   };
@@ -295,6 +298,7 @@ function ServicesTab() {
         pricePickup:    Math.round(parseFloat(form.pricePickup    || '0') * 100),
         estimatedMinutes: parseInt(String(form.estimatedMinutes), 10) || 60,
         sortOrder:        parseInt(String(form.sortOrder), 10) || 0,
+        esAdicional:      form.esAdicional,
       };
       if (editing) {
         await api(`/services/${editing}`, { method: 'PATCH', body });
@@ -340,6 +344,11 @@ function ServicesTab() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <p className="font-semibold text-sm text-gray-900">{s.name}</p>
+                  {s.es_adicional && (
+                    <span className="text-xs border border-brand-300 text-brand-800 bg-brand-50 px-2 py-0.5 rounded" title="Se suma a un lavado; no se reserva solo">
+                      Adicional
+                    </span>
+                  )}
                   {!s.is_active && <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">Inactivo</span>}
                 </div>
                 {s.description && <p className="text-xs text-gray-500 mt-0.5">{s.description}</p>}
@@ -380,6 +389,20 @@ function ServicesTab() {
             <Field label="Moto"      value={form.priceMoto}      onChange={(v) => set('priceMoto', v)}      type="number" />
             <Field label="Duración (min)" value={String(form.estimatedMinutes)} onChange={(v) => set('estimatedMinutes', v)} type="number" />
           </div>
+
+          <label className="flex items-start gap-3 mt-4 rounded-lg border border-gray-200 bg-gray-50 p-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={form.esAdicional}
+              onChange={(e) => set('esAdicional', e.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0"
+            />
+            <span className="text-sm text-gray-700 leading-snug">
+              <span className="font-semibold text-gray-900">Es un adicional.</span> Se ofrece para sumar a un lavado y no se
+              reserva solo. Por ejemplo, «Encera tú mismo»: al terminar el lavado, el cliente encera su carro acompañado por
+              alguien del equipo. Su duración y su precio se suman al turno.
+            </span>
+          </label>
 
           <button
             onClick={handleSave}

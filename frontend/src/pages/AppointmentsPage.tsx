@@ -28,6 +28,9 @@ interface Appointment {
   scheduled_date: string;
   scheduled_time: string | null;
   source: string;
+  adicionales?: Array<{ id: string; nombre: string; precio: number; minutos: number }>;
+  minutos_adicionales?: number;
+  adicional_iniciado_at?: string | null;
   bay_number: number | null;
   started_at: string | null;
   created_at: string;
@@ -66,6 +69,18 @@ export default function AppointmentsPage() {
   useEffect(() => {
     fetchAppointments();
   }, [fetchAppointments]);
+
+  // Terminó el lavado y empieza el adicional («encera tú mismo»).
+  const handleAdicional = async (id: string) => {
+    try {
+      await api(`/appointments/${id}/adicional`, { method: "PATCH" });
+      toast.success("Empieza el adicional");
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      fetchAppointments();
+    }
+  };
 
   const handleStatusChange = async (
     id: string,
@@ -198,6 +213,7 @@ export default function AppointmentsPage() {
               key={apt.id}
               appointment={apt}
               onStatusChange={handleStatusChange}
+              onAdicional={handleAdicional}
             />
           ))}
         </div>
@@ -219,6 +235,7 @@ export default function AppointmentsPage() {
 interface AppointmentCardProps {
   appointment: Appointment;
   onStatusChange(id: string, status: AppointmentStatus): void;
+  onAdicional(id: string): void;
 }
 
 const NEXT_STATUS: Partial<Record<AppointmentStatus, AppointmentStatus>> = {
@@ -236,7 +253,11 @@ const NEXT_LABEL: Partial<Record<AppointmentStatus, string>> = {
 function AppointmentCard({
   appointment: a,
   onStatusChange,
+  onAdicional,
 }: AppointmentCardProps) {
+  // Con adicionales, el lavado termina antes de marcar listo: ver BoardPage.
+  const pendienteAdicional =
+    a.status === "in_progress" && (a.adicionales?.length ?? 0) > 0 && !a.adicional_iniciado_at;
   const [confirmCancel, setConfirmCancel] = useState(false);
   const nextStatus = NEXT_STATUS[a.status];
   const nextLabel = NEXT_LABEL[a.status];
@@ -287,8 +308,14 @@ function AppointmentCard({
             {a.customer_first_name} {a.customer_last_name} — {a.customer_phone}
           </p>
           <p className="text-xs text-gray-400 mt-1">
-            {a.service_name} · {formatCOP(a.price)} · ~{a.estimated_minutes} min
+            {a.service_name} · {formatCOP(a.price)} · ~{a.estimated_minutes + (a.minutos_adicionales ?? 0)} min
           </p>
+          {(a.adicionales?.length ?? 0) > 0 && (
+            <p className="text-xs text-brand-800">
+              + {a.adicionales!.map((x) => x.nombre).join(", ")}
+              {a.adicional_iniciado_at && a.status === "in_progress" ? " · en curso" : ""}
+            </p>
+          )}
           {a.operator_first_name && (
             <p className="text-xs text-gray-400">
               Operador: {a.operator_first_name}
@@ -298,13 +325,22 @@ function AppointmentCard({
 
         {/* Right side: action button */}
         <div className="flex flex-col gap-2 shrink-0">
-          {nextStatus && nextLabel && (
+          {pendienteAdicional ? (
             <button
-              onClick={() => onStatusChange(a.id, nextStatus)}
+              onClick={() => onAdicional(a.id)}
               className="text-xs font-semibold px-3 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white transition whitespace-nowrap"
             >
-              {nextLabel}
+              Lavado listo → {a.adicionales!.map((x) => x.nombre).join(" y ")}
             </button>
+          ) : (
+            nextStatus && nextLabel && (
+              <button
+                onClick={() => onStatusChange(a.id, nextStatus)}
+                className="text-xs font-semibold px-3 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white transition whitespace-nowrap"
+              >
+                {nextLabel}
+              </button>
+            )
           )}
           {a.status !== "cancelled" && a.status !== "delivered" && (
             <button

@@ -42,7 +42,35 @@ interface BoardAppointment {
   total_amount?: number;
   notes: string | null;
   source: string;
+  operator_first_name?: string | null;
+  /** Servicios adicionales («encera tú mismo»), con precio en centavos. */
+  adicionales?: Array<{ id: string; nombre: string; precio: number; minutos: number }>;
+  minutos_adicionales?: number;
+  /** Cuándo terminó el lavado y empezó el adicional. */
+  adicional_iniciado_at?: string | null;
 }
+
+/**
+ * Qué toca hacer con el turno ahora. Con adicionales, «Lavando» tiene dos
+ * pasos: primero el lavado y después el adicional (el cliente encera su carro
+ * acompañado); el turno se marca listo al terminar el segundo.
+ */
+type Accion =
+  | { tipo: "estado"; status: AppointmentStatus; label: string }
+  | { tipo: "adicional"; label: string };
+
+function accionSiguiente(a: BoardAppointment): Accion | null {
+  const conAdicional = (a.adicionales?.length ?? 0) > 0;
+  if (a.status === "in_progress" && conAdicional && !a.adicional_iniciado_at) {
+    return { tipo: "adicional", label: `Lavado listo → ${a.adicionales!.map((x) => x.nombre).join(" y ")}` };
+  }
+  const status = NEXT_STATUS[a.status];
+  const label = NEXT_LABEL[a.status];
+  return status && label ? { tipo: "estado", status, label } : null;
+}
+
+/** El turno ya está en su adicional: el lavado terminó. */
+const enAdicional = (a: BoardAppointment) => a.status === "in_progress" && Boolean(a.adicional_iniciado_at);
 
 interface AppointmentDetail extends BoardAppointment {
   customer_email?: string | null;
@@ -167,6 +195,18 @@ export default function BoardPage() {
     }
   };
 
+  const handleAdicional = async (id: string) => {
+    try {
+      await api(`/appointments/${id}/adicional`, { method: "PATCH" });
+      const apt = appointments.find((a) => a.id === id);
+      toast.success(`Empieza: ${apt?.adicionales?.map((x) => x.nombre).join(" y ") ?? "el adicional"}`);
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      fetchData();
+    }
+  };
+
   const handlePaymentComplete = async () => {
     if (!paymentTarget) return;
     // After payment registered, move to delivered
@@ -279,6 +319,7 @@ export default function BoardPage() {
                           appointment={a}
                           operators={operators}
                           onStatusChange={handleStatusChange}
+                          onAdicional={handleAdicional}
                           onAssign={handleAssign}
                           onDetail={() => setDetailId(a.id)}
                           compact
@@ -315,6 +356,7 @@ export default function BoardPage() {
                           appointment={a}
                           operators={operators}
                           onStatusChange={handleStatusChange}
+                          onAdicional={handleAdicional}
                           onAssign={handleAssign}
                           onDetail={() => setDetailId(a.id)}
                         />
@@ -336,6 +378,10 @@ export default function BoardPage() {
           onClose={() => setDetailId(null)}
           onStatusChange={(id, s) => {
             handleStatusChange(id, s);
+            setDetailId(null);
+          }}
+          onAdicional={(id) => {
+            handleAdicional(id);
             setDetailId(null);
           }}
           onAssign={handleAssign}
@@ -360,6 +406,7 @@ interface KanbanCardProps {
   appointment: BoardAppointment;
   operators: Operator[];
   onStatusChange(id: string, status: AppointmentStatus): void;
+  onAdicional(id: string): void;
   onAssign(id: string, operatorId: string): void;
   onDetail(): void;
   compact?: boolean;
@@ -369,14 +416,14 @@ function KanbanCard({
   appointment: a,
   operators,
   onStatusChange,
+  onAdicional,
   onAssign,
   onDetail,
   compact,
 }: KanbanCardProps) {
   const elapsed = getElapsedTime(a);
   const isOvertime = isOvertimeCheck(a);
-  const nextStatus = NEXT_STATUS[a.status];
-  const nextLabel = NEXT_LABEL[a.status];
+  const accion = accionSiguiente(a);
 
   return (
     <div
@@ -412,6 +459,17 @@ function KanbanCard({
       <p className="text-xs text-gray-500 mt-0.5">
         {a.service_name} · {formatCOP(a.price)}
       </p>
+      {(a.adicionales?.length ?? 0) > 0 && (
+        <p className="text-xs text-brand-800 mt-0.5">+ {a.adicionales!.map((x) => x.nombre).join(", ")}</p>
+      )}
+      {enAdicional(a) && (
+        <p className="mt-1.5 text-xs font-semibold text-gray-900 bg-brand-50 border border-brand-300 rounded px-2 py-1">
+          Lavado listo · {a.adicionales!.map((x) => x.nombre).join(" y ")}
+          <span className="block font-normal text-gray-600">
+            Acompaña: {a.operator_first_name ?? "sin asignar"}
+          </span>
+        </p>
+      )}
 
       {/* Customer (full mode) */}
       {!compact && (
@@ -456,15 +514,16 @@ function KanbanCard({
       )}
 
       {/* Action button */}
-      {nextStatus && nextLabel && (
+      {accion && (
         <button
           onClick={(e) => {
             e.stopPropagation();
-            onStatusChange(a.id, nextStatus);
+            if (accion.tipo === "adicional") onAdicional(a.id);
+            else onStatusChange(a.id, accion.status);
           }}
           className="mt-3 w-full text-xs font-semibold py-2 rounded-lg border border-brand-400 text-brand-800 hover:bg-brand-600 hover:text-white hover:border-brand-600 transition"
         >
-          {nextLabel}
+          {accion.label}
         </button>
       )}
     </div>
@@ -478,6 +537,7 @@ interface DetailModalProps {
   operators: Operator[];
   onClose(): void;
   onStatusChange(id: string, status: AppointmentStatus): void;
+  onAdicional(id: string): void;
   onAssign(id: string, operatorId: string): void;
 }
 
@@ -486,6 +546,7 @@ function DetailModal({
   operators,
   onClose,
   onStatusChange,
+  onAdicional,
   onAssign,
 }: DetailModalProps) {
   const [data, setData] = useState<AppointmentDetail | null>(null);
@@ -510,8 +571,7 @@ function DetailModal({
     );
   }
 
-  const nextStatus = NEXT_STATUS[data.status];
-  const nextLabel = NEXT_LABEL[data.status];
+  const accion = accionSiguiente(data);
   const elapsed = getElapsedTime(data);
 
   return (
@@ -557,10 +617,16 @@ function DetailModal({
           {/* Service */}
           <Section title="Servicio">
             <InfoRow label="Servicio" value={data.service_name} />
+            {(data.adicionales?.length ?? 0) > 0 && (
+              <InfoRow
+                label="Adicionales"
+                value={data.adicionales!.map((x) => `${x.nombre} (${formatCOP(x.precio)})`).join(", ")}
+              />
+            )}
             <InfoRow label="Precio" value={formatCOP(data.price)} bold />
             <InfoRow
               label="Duración estimada"
-              value={`${data.estimated_minutes} min`}
+              value={`${data.estimated_minutes + (data.minutos_adicionales ?? 0)} min`}
             />
             {elapsed && <InfoRow label="Tiempo actual" value={elapsed} />}
             {data.bay_number && (
@@ -619,12 +685,12 @@ function DetailModal({
 
           {/* Actions */}
           <div className="flex gap-3 pt-2">
-            {nextStatus && nextLabel && (
+            {accion && (
               <button
-                onClick={() => onStatusChange(data.id, nextStatus)}
+                onClick={() => (accion.tipo === "adicional" ? onAdicional(data.id) : onStatusChange(data.id, accion.status))}
                 className="flex-1 py-3 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-xl transition text-sm"
               >
-                {nextLabel}
+                {accion.label}
               </button>
             )}
             {data.status !== "cancelled" && data.status !== "delivered" && (
@@ -709,7 +775,7 @@ function isOvertimeCheck(appointment: BoardAppointment): boolean {
   if (!appointment.started_at || !appointment.estimated_minutes) return false;
   const elapsed =
     (Date.now() - new Date(appointment.started_at).getTime()) / 60_000;
-  return elapsed > appointment.estimated_minutes;
+  return elapsed > appointment.estimated_minutes + (appointment.minutos_adicionales ?? 0);
 }
 
 /**
