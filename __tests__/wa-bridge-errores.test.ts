@@ -39,7 +39,7 @@ beforeAll(async () => {
 
   const { rows } = await db.queryAdmin<{ id: string }>(
     `SELECT id FROM services WHERE tenant_id = (SELECT id FROM tenants WHERE slug='el-brillante')
-     AND is_active = true LIMIT 1`,
+     AND is_active = true AND NOT es_adicional ORDER BY sort_order LIMIT 1`,
   );
   serviceId = rows[0].id;
 });

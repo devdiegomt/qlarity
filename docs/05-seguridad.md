@@ -298,10 +298,20 @@ tenants, en vez de funcionar por casualidad.
 Es un agujero, sí. La diferencia con no tener RLS es que ahora está en cinco
 lugares que se leen en un minuto, en vez de repartido en 212 consultas.
 
-**Sin RLS quedan** `plans`, que es el catálogo global de la plataforma y no es de
-nadie, y `refresh_tokens`, que se consulta por el hash del token antes de saber de
-qué tenant es la sesión — el mismo problema de orden que la autenticación. Lo que
-protege a esa tabla es que sólo guarda hashes.
+**Las dos globales.** `plans` es el catálogo de la plataforma y no es de nadie, y
+`refresh_tokens` se consulta por el hash del token antes de saber de qué lavadero
+es la sesión. No se aíslan por tenant. Hasta 2026-11 quedaban **sin** RLS, y eso
+bastaba para la aplicación, pero no para Supabase: publica toda tabla de `public`
+por su API de datos (PostgREST), y una tabla sin RLS ahí la lee cualquiera con la
+clave pública del proyecto. Supabase lo avisó por correo.
+
+Ahora tienen RLS con una política `TO carwash_app USING (true)`: la aplicación
+entra igual que antes, y los roles de la API de Supabase (`anon`,
+`authenticated`), que no tienen política, no ven nada. Además `db:migrate-rls` les
+quita a esos dos roles todo permiso sobre las tablas de `public`, incluidas las
+futuras: Qlarity no usa esa API, así que no tiene por qué estar abierta.
+`__tests__/rls-todas-las-tablas.test.ts` falla si una migración deja una tabla sin
+RLS. `refresh_tokens` sigue guardando sólo hashes.
 
 **Cómo se verifica.** `npm run test:rls` corre la suite entera conectada como
 `carwash_app`, con las políticas aplicándose de verdad. `__tests__/rls.test.ts`
