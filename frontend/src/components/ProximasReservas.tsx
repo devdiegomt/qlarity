@@ -62,7 +62,7 @@ export default function ProximasReservas() {
             <ul className="bg-white border border-gray-100 rounded-xl divide-y divide-gray-100">
               {turnos.map((t) => (
                 <li key={t.id} className="flex items-center gap-3 px-4 py-3 text-sm">
-                  <span className="font-mono text-xs text-gray-700 w-16 shrink-0">
+                  <span className="font-mono text-xs text-gray-700 w-20 shrink-0 whitespace-nowrap">
                     {t.scheduled_time ? formatTime(t.scheduled_time) : '—'}
                   </span>
                   <span className="min-w-0 flex-1">

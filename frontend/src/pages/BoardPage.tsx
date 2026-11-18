@@ -2,6 +2,7 @@ import { inicioDeEspera } from "../lib/fechas";
 import EtiquetaWeb from "../components/EtiquetaWeb";
 import FotosRecepcion from "../components/FotosRecepcion";
 import BotonEncuesta from "../components/BotonEncuesta";
+import SellosCliente from "../components/SellosCliente";
 import { useProximas } from "../components/ProximasReservas";
 import { Link } from "react-router-dom";
 import { ESTADOS, PastillaEstado, Placa, PuntoEstado } from "../lib/estados";
@@ -637,6 +638,10 @@ function DetailModal({
               <InfoRow label="Bahía" value={`Bahía ${data.bay_number}`} />
             )}
             {data.notes && <InfoRow label="Notas" value={data.notes} />}
+          </Section>
+
+          <Section title="Tarjeta de sellos">
+            <SellosCliente appointmentId={data.id} />
           </Section>
 
           {(data.status === "done" || data.status === "delivered") && (

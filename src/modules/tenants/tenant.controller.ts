@@ -13,6 +13,7 @@ const ALLOWED_FIELDS: ReadonlyArray<keyof TenantRow> = [
   'opening_time', 'closing_time', 'bays_count',
   'whatsapp_enabled', 'whatsapp_phone', 'whatsapp_provider',
   'google_review_url',
+  'fidelidad_sellos_meta', 'fidelidad_dias_regreso',
 ];
 
 // ─── GET /api/tenants/me ─────────────────────────────────────────────────────
@@ -21,7 +22,8 @@ export async function getCurrent(req: Request, res: Response): Promise<void> {
   const { rows } = await db.query<TenantRow>(
     `SELECT id, name, slug, nit, owner_name, phone, email, address, city,
             timezone, opening_time, closing_time, bays_count, currency, plan,
-            whatsapp_enabled, whatsapp_phone, whatsapp_provider, google_review_url, created_at
+            whatsapp_enabled, whatsapp_phone, whatsapp_provider, google_review_url,
+            fidelidad_sellos_meta, fidelidad_dias_regreso, created_at
      FROM tenants
      WHERE id = $1`,
     [req.tenantId],

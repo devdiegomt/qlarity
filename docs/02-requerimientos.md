@@ -38,6 +38,14 @@ Nomenclatura: `RF-<módulo>-<n>`.
 | RF-TUR-12 | Al recibir el vehículo se pueden tomar hasta 12 fotos de su estado desde el detalle del turno; el celular las achica antes de subirlas. Un turno puede tener un **reclamo** abierto con nota: mientras lo esté, sus fotos no se borran. Las demás se borran a los 90 días | `/api/appointments/:id/fotos`, `PATCH /:id/reclamo`, `fotos.test.ts`, `e2e/fotos.spec.ts` |
 | RF-TUR-13 | Con el carro listo o entregado, el panel abre WhatsApp con un mensaje y el enlace a una encuesta (`/calificar/:token`, un enlace por turno): 1 a 5 estrellas y un comentario, una sola vez. Después se ofrece el enlace de reseñas de Google del lavadero **a todos** (Google prohíbe filtrar). Reportes muestra promedio, distribución y comentarios | `resenas.test.ts`, `e2e/resenas.spec.ts` |
 
+### Fidelización
+
+| ID | Requerimiento | Dónde |
+|---|---|---|
+| RF-FID-1 | **Tarjeta de sellos:** cada lavado pagado suma un sello; el lavado número N (Configuración, 6 por defecto; 0 la apaga) es gratis. El premio se aplica al cobrar: el backend comprueba que lo tenga y calcula el monto (los adicionales se cobran). Los sellos no se guardan: se cuentan desde los pagos, después del último premio | `fidelizacion.ts`, `payments.origen/descuento`, `fidelizacion.test.ts`, `e2e/fidelizacion.spec.ts` |
+| RF-FID-2 | **Clientes que no han vuelto:** en Inicio, los que llevan más de N días (30 por defecto; 0 lo apaga) desde su última entrega, sin turno pendiente, con un botón que abre WhatsApp con una invitación, sus sellos y el enlace de reservas. Al invitar, deja de aparecer 14 días | `GET /api/customers/sin-volver`, `POST /:id/invitado` |
+| RF-FID-3 | **Tiquetera** (paquete prepagado de lavados) y plan mensual | Pendiente: PR aparte |
+
 ### Clientes y vehículos
 
 | ID | Requerimiento | Dónde |
