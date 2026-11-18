@@ -3,7 +3,7 @@
  * sesión y el turno aparece en la agenda del panel.
  */
 import { test, expect } from '@playwright/test';
-import { comprobarBackend, entrar } from './ayudas';
+import { API, comprobarBackend, entrar } from './ayudas';
 
 // Un número por corrida: el backend limita las reservas pendientes por teléfono.
 const telefono = () => `311${String(Date.now()).slice(-7)}`;
@@ -75,5 +75,38 @@ test.describe('con el backend', () => {
     await entrar(page);
     await page.goto('/settings');
     await expect(page.getByTestId('enlace-reservas')).toHaveText(/\/reservar\/el-brillante$/);
+  });
+});
+
+test.describe('una reserva para otro día', () => {
+  // «Hoy» es el del lavadero (Bogotá), no el de la máquina que corre la prueba:
+  // en CI, de 7 p. m. a medianoche, UTC ya es mañana.
+  test.use({ timezoneId: 'America/Bogota' });
+  test.beforeAll(async ({ request }) => {
+    await comprobarBackend(request);
+  });
+
+  test('no se puede iniciar; «Atender hoy» la pasa a hoy y ahí sí', async ({ page, request }) => {
+    const base = `${API}/publico/lavaderos/el-brillante/reservas`;
+    const datos = await (await request.get(base)).json();
+    const completo = datos.servicios.find((s: { nombre: string }) => s.nombre === 'Lavado Completo');
+    const dias = (await (await request.get(`${base}/horarios?servicio=${completo.id}`)).json()).dias as Array<{ fecha: string; horas: string[] }>;
+    const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+    const dia = dias.filter((d) => d.fecha > hoy).pop()!;
+    const p = placa();
+    const r = await request.post(base, {
+      data: { autorizaDatos: true, servicioId: completo.id, tipoVehiculo: 'sedan', fecha: dia.fecha, hora: dia.horas[0], nombre: 'Adelantado', telefono: telefono(), placa: p },
+    });
+    expect(r.status()).toBe(201);
+
+    await entrar(page);
+    await page.goto(`/appointments?fecha=${dia.fecha}`);
+    const tarjeta = page.locator('div.rounded-xl', { hasText: p }).first();
+    await expect(tarjeta.getByRole('button', { name: 'Atender hoy' })).toBeVisible();
+    await expect(tarjeta.getByRole('button', { name: 'Iniciar lavado' })).toHaveCount(0);
+
+    await tarjeta.getByRole('button', { name: 'Atender hoy' }).click();
+    await expect(page.locator('input[type="date"]')).toHaveValue(hoy);
+    await expect(page.locator('div.rounded-xl', { hasText: p }).first().getByRole('button', { name: 'Iniciar lavado' })).toBeVisible();
   });
 });
