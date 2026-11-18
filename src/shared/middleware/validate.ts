@@ -291,6 +291,8 @@ export const schemas = {
     // adicionales se cobran); sin premio tiene que ser positivo, como siempre.
     amount: z.number().int().min(0, 'El monto no puede ser negativo'),
     premio: z.boolean().default(false),
+    // Pagar el lavado con una tiquetera del cliente: sólo se cobran los adicionales.
+    tiqueteraId: uuid.optional(),
     paymentMethod: z.enum(
       ['cash', 'nequi', 'daviplata', 'transfer', 'card'],
       { errorMap: () => ({ message: 'Método de pago inválido' }) },

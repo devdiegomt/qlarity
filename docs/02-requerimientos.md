@@ -44,7 +44,8 @@ Nomenclatura: `RF-<módulo>-<n>`.
 |---|---|---|
 | RF-FID-1 | **Tarjeta de sellos:** cada lavado pagado suma un sello; el lavado número N (Configuración, 6 por defecto; 0 la apaga) es gratis. El premio se aplica al cobrar: el backend comprueba que lo tenga y calcula el monto (los adicionales se cobran). Los sellos no se guardan: se cuentan desde los pagos, después del último premio | `fidelizacion.ts`, `payments.origen/descuento`, `fidelizacion.test.ts`, `e2e/fidelizacion.spec.ts` |
 | RF-FID-2 | **Clientes que no han vuelto:** en Inicio, los que llevan más de N días (30 por defecto; 0 lo apaga) desde su última entrega, sin turno pendiente, con un botón que abre WhatsApp con una invitación, sus sellos y el enlace de reservas. Al invitar, deja de aparecer 14 días | `GET /api/customers/sin-volver`, `POST /:id/invitado` |
-| RF-FID-3 | **Tiquetera** (paquete prepagado de lavados) y plan mensual | Pendiente: PR aparte |
+| RF-FID-3 | **Tiquetera:** paquetes de N lavados de un servicio por un precio, con vencimiento opcional (Configuración → Servicios). Se venden desde Clientes; la plata entra a los ingresos **el día de la venta** (Inicio y Reportes: total, por día y por método). Al cobrar un turno del mismo servicio, se usa un lavado: el lavado sale en $0 y los adicionales se cobran; lo pagado con tiquetera no suma sellos. El saldo se descuenta en el mismo `UPDATE` que comprueba que quede (dos cobros a la vez no gastan el mismo lavado), en la misma transacción que el pago | `tiquetera.ts`, `tiquetera.test.ts`, `e2e/tiquetera.spec.ts` |
+| RF-FID-4 | Plan mensual (suscripción con cobro automático) | Pendiente: requiere integrar un medio de pago |
 
 ### Clientes y vehículos
 

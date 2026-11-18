@@ -1,3 +1,4 @@
+import { ventasTiquetera } from '../fidelizacion/tiquetera';
 import type { Request, Response } from 'express';
 import * as db from '../../shared/db';
 import { AppError } from '../../shared/middleware/errorHandler';
@@ -106,7 +107,9 @@ export async function getDayStats(req: Request, res: Response): Promise<void> {
     date: todayDate,
     appointments: rows[0],
     revenue: {
-      total: parseInt(revenueRows[0].total_revenue, 10),
+      // Más lo que entró hoy por tiqueteras vendidas (se cuentan al venderse).
+      total: parseInt(revenueRows[0].total_revenue, 10)
+        + (await ventasTiquetera(req.tenantId!, todayDate, todayDate)).reduce((t, v) => t + v.total, 0),
       payments: parseInt(revenueRows[0].total_payments, 10),
     },
   });

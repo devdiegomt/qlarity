@@ -57,3 +57,8 @@ export function inicioDeEspera(t: TurnoConTiempos, ahora: Date = new Date()): Da
   }
   return new Date(t.created_at);
 }
+
+/** «2027-02-16» → «16 feb 2027». */
+export function fechaCorta(fecha: string): string {
+  return new Date(`${fecha.slice(0, 10)}T12:00:00`).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' });
+}
