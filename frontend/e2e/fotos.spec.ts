@@ -2,14 +2,30 @@
  * Fotos de recepción en el detalle del turno: se toman, se achican en el
  * navegador, se suben y se ven; y el reclamo que impide borrarlas.
  */
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { API, EMAIL, PASSWORD, comprobarBackend, entrar } from './ayudas';
 
-// Un PNG de 8x8 que el navegador sabe decodificar (createImageBitmap lo exige).
-const PNG = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlEQVR4nGM4YaOBFTEMLQkAdntLARs7+acAAAAASUVORK5CYII=',
-  'base64',
-);
+/**
+ * Elige una foto en el campo de archivo como lo haría el celular. La imagen se
+ * dibuja en el propio navegador: así es una imagen que createImageBitmap sabe
+ * decodificar, y la prueba no depende de los tipos de Node (que este tsconfig no
+ * incluye).
+ */
+async function elegirFoto(page: Page): Promise<void> {
+  await page.getByTestId('entrada-fotos').evaluate(async (entrada: HTMLInputElement) => {
+    const lienzo = document.createElement('canvas');
+    lienzo.width = 64;
+    lienzo.height = 48;
+    const ctx = lienzo.getContext('2d')!;
+    ctx.fillStyle = '#b4504a';
+    ctx.fillRect(0, 0, 64, 48);
+    const blob = await new Promise<Blob>((ok) => lienzo.toBlob((b) => ok(b!), 'image/png'));
+    const dt = new DataTransfer();
+    dt.items.add(new File([blob], 'puerta.png', { type: 'image/png' }));
+    entrada.files = dt.files;
+    entrada.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+}
 
 test.beforeAll(async ({ request }) => {
   await comprobarBackend(request);
@@ -35,7 +51,7 @@ test('se toma una foto al recibir el carro, se ve, y un reclamo la protege', asy
   await page.locator('div.cursor-pointer', { hasText: placa }).filter({ visible: true }).first().getByText(placa).click();
   await expect(page.getByText('Todavía no hay fotos de cómo llegó el vehículo.')).toBeVisible();
 
-  await page.getByTestId('entrada-fotos').setInputFiles({ name: 'puerta.png', mimeType: 'image/png', buffer: PNG });
+  await elegirFoto(page);
   const miniaturas = page.getByRole('list', { name: 'Fotos de recepción' }).getByRole('button');
   await expect(miniaturas).toHaveCount(1);
 
