@@ -1,6 +1,7 @@
 import { inicioDeEspera } from "../lib/fechas";
 import EtiquetaWeb from "../components/EtiquetaWeb";
 import FotosRecepcion from "../components/FotosRecepcion";
+import BotonEncuesta from "../components/BotonEncuesta";
 import { useProximas } from "../components/ProximasReservas";
 import { Link } from "react-router-dom";
 import { ESTADOS, PastillaEstado, Placa, PuntoEstado } from "../lib/estados";
@@ -637,6 +638,12 @@ function DetailModal({
             )}
             {data.notes && <InfoRow label="Notas" value={data.notes} />}
           </Section>
+
+          {(data.status === "done" || data.status === "delivered") && (
+            <Section title="¿Cómo le fue al cliente?">
+              <BotonEncuesta appointmentId={data.id} />
+            </Section>
+          )}
 
           <Section title="Fotos de recepción">
             <FotosRecepcion

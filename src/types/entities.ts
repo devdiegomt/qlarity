@@ -41,6 +41,7 @@ export interface TenantRow {
   id: string;
   name: string;
   slug: string;
+  google_review_url: string | null;
   nit: string | null;
   owner_name: string | null;
   phone: string | null;

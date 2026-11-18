@@ -80,6 +80,7 @@ export default function AvisoLavaderoPage() {
           <li>La placa, el tipo, la marca, el modelo y el color de tu vehículo.</li>
           <li>Fotos de cómo llega tu vehículo, para poder resolver cualquier reclamo. Se borran a los 90 días, salvo que haya un reclamo abierto.</li>
           <li>Tus turnos, los servicios que te hicimos y tus pagos.</li>
+          <li>Si respondes nuestra encuesta: tu calificación y tu comentario.</li>
           <li>Si nos escribes por WhatsApp a través de nuestro asistente: el texto de tus mensajes.</li>
         </ul>
       </Seccion>

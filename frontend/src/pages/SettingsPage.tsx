@@ -25,6 +25,7 @@ interface Tenant {
   opening_time: string | null;
   closing_time: string | null;
   bays_count: number;
+  google_review_url: string | null;
 }
 
 interface Service {
@@ -135,6 +136,7 @@ function GeneralTab() {
           opening_time: tenant.opening_time,
           closing_time: tenant.closing_time,
           bays_count:   typeof tenant.bays_count === 'string' ? parseInt(tenant.bays_count, 10) : tenant.bays_count,
+          google_review_url: tenant.google_review_url ?? '',
         },
       });
       setTenant(updated);
@@ -173,6 +175,19 @@ function GeneralTab() {
         <Field label="Hora cierre"       value={tenant.closing_time ?? '19:00'}   onChange={(v) => set('closing_time', v)} type="time" />
         <Field label="Número de bahías"  value={String(tenant.bays_count ?? 3)}   onChange={(v) => set('bays_count', parseInt(v, 10) || 3)} type="number" />
       </div>
+
+      <SectionTitle>Reseñas en Google</SectionTitle>
+      <Field
+        label="Enlace para dejar reseña"
+        value={tenant.google_review_url ?? ''}
+        onChange={(v) => set('google_review_url', v)}
+        placeholder="https://g.page/r/..."
+        full
+      />
+      <p className="text-xs text-gray-500 -mt-2">
+        Sácalo de tu Perfil de Empresa en Google, en «Pedir reseñas». Después de calificar el servicio, a cada cliente
+        se le ofrece este enlace: a todos, no sólo a los contentos, porque Google no permite elegir quién deja reseña.
+      </p>
 
       <div className="flex items-center gap-3 pt-2">
         <button

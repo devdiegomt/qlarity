@@ -10,7 +10,7 @@
  * que alguien lo note.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { comprobarBackend, entrar } from './ayudas';
+import { API, EMAIL, PASSWORD, comprobarBackend, entrar } from './ayudas';
 
 interface Falla {
   texto: string;
@@ -95,6 +95,28 @@ for (const esquema of ['dark', 'light'] as const) {
       await page.getByRole('button', { name: 'Confirmar reserva' }).click(); // el aviso de error
       await page.waitForLoadState('networkidle');
       expect(await fallasDeContraste(page), '/reservar').toEqual([]);
+    });
+
+    test('la encuesta del cliente se lee', async ({ page, request }) => {
+      await comprobarBackend(request);
+      const login = await request.post(`${API}/auth/login`, { data: { email: EMAIL, password: PASSWORD } });
+      const headers = { Authorization: `Bearer ${(await login.json()).accessToken}` };
+      const servicios = (await (await request.get(`${API}/services`, { headers })).json()) as Array<{ id: string; es_adicional?: boolean }>;
+      const turno = await (await request.post(`${API}/appointments/quick`, {
+        headers,
+        data: {
+          autorizaDatos: true, customerPhone: `316${String(Date.now()).slice(-7)}`, customerFirstName: 'Contraste',
+          plate: `CTR${String(Date.now()).slice(-3)}`, vehicleType: 'sedan', serviceId: servicios.find((s) => !s.es_adicional)!.id,
+        },
+      })).json();
+      for (const status of ['in_progress', 'done']) {
+        await request.patch(`${API}/appointments/${turno.id}/status`, { headers, data: { status } });
+      }
+      const { token } = await (await request.post(`${API}/appointments/${turno.id}/encuesta`, { headers })).json();
+      await page.goto(`/calificar/${token}`);
+      await page.getByRole('radio', { name: '4 estrellas' }).click();
+      await page.waitForLoadState('networkidle');
+      expect(await fallasDeContraste(page), '/calificar').toEqual([]);
     });
 
     test('las pantallas del panel se leen', async ({ page, request }) => {

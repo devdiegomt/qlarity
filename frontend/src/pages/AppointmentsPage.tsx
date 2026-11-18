@@ -3,6 +3,7 @@ import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useSearchParams } from "react-router-dom";
 import { etiquetaDia, fechaLocal, inicioDeEspera, sumarDias } from "../lib/fechas";
 import EtiquetaWeb from "../components/EtiquetaWeb";
+import BotonEncuesta from "../components/BotonEncuesta";
 import { useState, useEffect, useCallback } from "react";
 import { api } from "../lib/api";
 import { formatCOP, formatTime } from "../lib/format";
@@ -342,6 +343,7 @@ function AppointmentCard({
               </button>
             )
           )}
+          {a.status === "delivered" && <BotonEncuesta appointmentId={a.id} compacto />}
           {a.status !== "cancelled" && a.status !== "delivered" && (
             <button
               onClick={() => setConfirmCancel(true)}
