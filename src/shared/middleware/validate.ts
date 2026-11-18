@@ -287,7 +287,10 @@ export const schemas = {
   // ── Payments ──────────────────────────────────────────────────────────────
   paymentCreate: z.object({
     appointmentId: uuid,
-    amount: z.number().int().positive('El monto debe ser mayor a 0'),
+    // Con premio el backend calcula el monto (puede quedar en 0: sólo los
+    // adicionales se cobran); sin premio tiene que ser positivo, como siempre.
+    amount: z.number().int().min(0, 'El monto no puede ser negativo'),
+    premio: z.boolean().default(false),
     paymentMethod: z.enum(
       ['cash', 'nequi', 'daviplata', 'transfer', 'card'],
       { errorMap: () => ({ message: 'Método de pago inválido' }) },
@@ -483,6 +486,13 @@ export const schemas = {
         .refine((v) => v === null || /^https:\/\/[^\s]+$/.test(v), 'El enlace de Google tiene que empezar por https://')
         .nullable()
         .optional(),
+      // Tarjeta de sellos: el lavado número N es gratis; 0 la desactiva.
+      fidelidad_sellos_meta: z
+        .number()
+        .int()
+        .refine((n) => n === 0 || (n >= 2 && n <= 50), 'El premio va cada 2 a 50 lavados (0 lo desactiva)')
+        .optional(),
+      fidelidad_dias_regreso: z.number().int().min(0).max(365, 'Máximo 365 días').optional(),
     })
     .passthrough(),
 

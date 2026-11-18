@@ -42,6 +42,8 @@ export interface TenantRow {
   name: string;
   slug: string;
   google_review_url: string | null;
+  fidelidad_sellos_meta: number;
+  fidelidad_dias_regreso: number;
   nit: string | null;
   owner_name: string | null;
   phone: string | null;
