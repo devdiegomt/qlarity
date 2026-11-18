@@ -263,8 +263,10 @@ export class ApiError extends Error {
 export async function api<T = unknown>(path: string, options: ApiOptions = {}): Promise<T> {
   const { body, headers: customHeaders, method = 'GET' } = options;
 
+  // Un archivo (una foto) va tal cual, con su tipo; lo demás, como JSON.
+  const esArchivo = typeof Blob !== 'undefined' && body instanceof Blob;
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    'Content-Type': esArchivo ? (body as Blob).type || 'application/octet-stream' : 'application/json',
     ...customHeaders,
   };
 
@@ -283,7 +285,7 @@ export async function api<T = unknown>(path: string, options: ApiOptions = {}): 
     credentials: 'include',
   };
   if (body !== undefined) {
-    config.body = JSON.stringify(body);
+    config.body = esArchivo ? (body as Blob) : JSON.stringify(body);
   }
 
   let res = await fetch(`${API_URL}${path}`, config);

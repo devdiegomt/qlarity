@@ -24,11 +24,11 @@ export const RESPONSABLE = {
 };
 
 /** Versión de la política. Sube junto con VERSION_POLITICA_QLARITY del backend. */
-export const VERSION_POLITICA = '2026-11-v1';
-export const VIGENTE_DESDE = '2026-11-04';
+export const VERSION_POLITICA = '2026-11-v2';
+export const VIGENTE_DESDE = '2026-11-18';
 
 /**
  * Versión del aviso de cada lavadero. Sube junto con VERSION_AVISO_LAVADERO
  * del backend: es la que queda guardada en cada autorización del panel.
  */
-export const VERSION_AVISO_LAVADERO = '2026-11-v1';
+export const VERSION_AVISO_LAVADERO = '2026-11-v2';

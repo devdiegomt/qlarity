@@ -16,6 +16,7 @@ import { sendAppointmentReminders } from '../../modules/whatsapp/notifications';
 import {
   purgarMensajesViejos,
   anonimizarClientesInactivos,
+  purgarFotosViejas,
   purgarAuditoriaVieja,
   politicaRetencion,
 } from './retencion';
@@ -127,9 +128,9 @@ export function initCronJobs(): void {
   const HORA = 60 * 60 * 1_000;
   const MINUTO = 60 * 1_000;
 
-  // `refresh_tokens` es una de las tres tablas sin RLS a propósito —se consulta
-  // por el hash antes de saber de qué tenant es la sesión— así que ésta no
-  // necesita bypass.
+  // `refresh_tokens` no se aísla por lavadero —se consulta por el hash antes de
+  // saber de qué tenant es la sesión—: su política deja entrar al rol de la
+  // aplicación sin más, así que ésta no necesita bypass.
   programar('cleanExpiredTokens', 6 * HORA, cleanExpiredTokens);
 
   // Ésta sí: `billing_errors` está bajo RLS y esto recorre todos los tenants.
@@ -156,6 +157,10 @@ export function initCronJobs(): void {
   // seguido sólo agrega DELETEs que no borran nada.
   programar('purgarMensajesViejos', 24 * HORA, () =>
     conBypassRlsFueraDePeticion(() => purgarMensajesViejos()),
+  );
+  // Las fotos de recepción: 90 días, salvo turnos con reclamo abierto.
+  programar('purgarFotosViejas', 24 * HORA, () =>
+    conBypassRlsFueraDePeticion(() => purgarFotosViejas()),
   );
   programar('anonimizarClientesInactivos', 24 * HORA, () =>
     conBypassRlsFueraDePeticion(() => anonimizarClientesInactivos()),

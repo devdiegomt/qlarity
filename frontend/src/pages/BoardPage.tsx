@@ -1,5 +1,6 @@
 import { inicioDeEspera } from "../lib/fechas";
 import EtiquetaWeb from "../components/EtiquetaWeb";
+import FotosRecepcion from "../components/FotosRecepcion";
 import { useProximas } from "../components/ProximasReservas";
 import { Link } from "react-router-dom";
 import { ESTADOS, PastillaEstado, Placa, PuntoEstado } from "../lib/estados";
@@ -48,6 +49,8 @@ interface BoardAppointment {
   minutos_adicionales?: number;
   /** Cuándo terminó el lavado y empezó el adicional. */
   adicional_iniciado_at?: string | null;
+  reclamo_abierto_at?: string | null;
+  reclamo_nota?: string | null;
 }
 
 /**
@@ -633,6 +636,14 @@ function DetailModal({
               <InfoRow label="Bahía" value={`Bahía ${data.bay_number}`} />
             )}
             {data.notes && <InfoRow label="Notas" value={data.notes} />}
+          </Section>
+
+          <Section title="Fotos de recepción">
+            <FotosRecepcion
+              appointmentId={data.id}
+              reclamoAbiertoEn={data.reclamo_abierto_at ?? null}
+              reclamoNota={data.reclamo_nota ?? null}
+            />
           </Section>
 
           {/* Operator assignment */}

@@ -89,7 +89,8 @@ export interface Autorizacion {
  * autorizaciones que vienen del panel. Si cambia el texto de esa página de
  * forma sustantiva, se sube acá y en `frontend/src/pages/AvisoLavaderoPage.tsx`.
  */
-export const VERSION_AVISO_LAVADERO = '2026-11-v1';
+// v2 (2026-11-18): las fotos de recepción del vehículo.
+export const VERSION_AVISO_LAVADERO = '2026-11-v2';
 
 /**
  * Versión de la política de tratamiento de datos **de Qlarity** (`/privacidad`
@@ -98,7 +99,8 @@ export const VERSION_AVISO_LAVADERO = '2026-11-v1';
  * `onboarding_log`. Igual que la de arriba, va en sincronía con
  * `frontend/src/pages/PoliticaPrivacidadPage.tsx`.
  */
-export const VERSION_POLITICA_QLARITY = '2026-11-v1';
+// v2 (2026-11-18): las fotos de recepción del vehículo.
+export const VERSION_POLITICA_QLARITY = '2026-11-v2';
 
 export function autorizacionDe(
   source: Autorizacion['consentSource'],

@@ -22,6 +22,7 @@ import waBridgeRoutes    from './modules/whatsapp/wa-bridge.routes';
 import auditRoutes       from './modules/audit/audit.routes';
 import publicoRoutes from './modules/publico/publico.routes';
 import { initBooking }   from './modules/whatsapp/wa-bridge.booking';
+import { almacenLocal }  from './shared/storage/fotos';
 import Redis             from 'ioredis';
 
 import logger, { httpLogger } from './shared/utils/logger';
@@ -111,6 +112,32 @@ app.use('/api/superadmin',   superadminRoutes);
 app.use('/api/audit',        auditRoutes);
 // Sin sesión: el aviso de privacidad y la página de reservas de cada lavadero.
 app.use('/api/publico',      publicoRoutes);
+
+// Fotos guardadas en disco (sólo desarrollo y pruebas; en producción están en
+// Supabase Storage y el enlace firmado apunta allá). La firma y el vencimiento
+// van en el enlace: un <img> no manda la cabecera Authorization.
+app.get(/^\/api\/archivos\/(.+)$/, (req: Request, res: Response) => {
+  const local = almacenLocal();
+  if (!local) {
+    res.status(404).json({ error: 'No encontrado' });
+    return;
+  }
+  const ruta = (req.params as Record<string, string>)[0];
+  void local
+    .leerFirmado(ruta, Number(req.query.vence), String(req.query.firma ?? ''))
+    .then((bytes) => {
+      if (!bytes) {
+        res.status(404).json({ error: 'Enlace vencido o inválido' });
+        return;
+      }
+      const ext = ruta.split('.').pop();
+      res.setHeader('Content-Type', ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg');
+      res.setHeader('Cache-Control', 'private, max-age=600');
+      // helmet pone same-origin y en desarrollo el panel corre en otro puerto.
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      res.send(bytes);
+    });
+});
 
 // WhatsApp AI Bridge (consumido por n8n)
 app.use('/api/wa-bridge', waBridgeRoutes);

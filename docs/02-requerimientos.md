@@ -35,6 +35,7 @@ Nomenclatura: `RF-<módulo>-<n>`.
 | RF-TUR-9 | Los horarios ofrecidos respetan la hora de apertura y cierre, los días de cierre, la ventana de días (`booking_days_ahead`) y las bahías: el servicio tiene que terminar antes del cierre y no puede chocar con turnos que empiecen mientras dura | `horasLibres` en `reservas.ts` |
 | RF-TUR-10 | La página no recibe reservas si la suscripción está vencida o el plan llegó a su tope de turnos del mes; topes de 2 reservas pendientes por teléfono y 40 reservas web por día y lavadero | idem |
 | RF-TUR-11 | Un turno con adicionales tiene dos pasos dentro de «Lavando»: el lavado y, al marcarlo terminado, el adicional (el cliente encera acompañado por el operario asignado). El turno se marca listo al terminar el adicional | `PATCH /api/appointments/:id/adicional` |
+| RF-TUR-12 | Al recibir el vehículo se pueden tomar hasta 12 fotos de su estado desde el detalle del turno; el celular las achica antes de subirlas. Un turno puede tener un **reclamo** abierto con nota: mientras lo esté, sus fotos no se borran. Las demás se borran a los 90 días | `/api/appointments/:id/fotos`, `PATCH /:id/reclamo`, `fotos.test.ts`, `e2e/fotos.spec.ts` |
 
 ### Clientes y vehículos
 

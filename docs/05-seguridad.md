@@ -628,6 +628,19 @@ o dejar que la retención los anonimice al vencer el plazo.
 |---|---|---|---|
 | `purgarMensajesViejos` | Borra conversaciones más viejas que el plazo | `DATA_RETENTION_MESSAGES_MONTHS` | 12 meses |
 | `anonimizarClientesInactivos` | Anonimiza clientes sin visitas en el plazo | `DATA_RETENTION_CUSTOMERS_MONTHS` | `0` (desactivado) |
+| `purgarFotosViejas` | Borra las fotos de recepción más viejas que el plazo, **salvo** las de turnos con reclamo abierto | `DATA_RETENTION_PHOTOS_DAYS` | 90 días |
+
+**Fotos de recepción (2026-11).** Son la prueba de cómo llegó el carro, así que
+pueden mostrar la placa y son dato personal del cliente. Viven en un bucket
+**privado** de Supabase Storage; el panel las ve con enlaces firmados que vencen
+a los 15 minutos, y el backend comprueba que cada archivo sea una imagen por sus
+primeros bytes. Se borran a los 90 días, salvo las de un turno con **reclamo
+abierto**, que es justamente cuando hay que conservar la prueba. Con un reclamo
+abierto tampoco se pueden borrar a mano. Si el cliente pide suprimir sus datos,
+sus fotos se borran también, salvo las de un reclamo abierto (deber de conservar
+la prueba). Al borrar, primero se borra el archivo y después la fila: si Storage
+falla, la fila queda y la purga lo reintenta. Lo prueban `fotos.test.ts` y
+`fotos-supabase.test.ts`.
 
 **Los plazos son una decisión del responsable del tratamiento, no una constante
 técnica.** Por eso salen de configuración y `0` desactiva la tarea. Los valores
@@ -938,6 +951,7 @@ Las tres salidas siguen siendo las mismas, y la elección depende del tamaño:
 | `ANTHROPIC_API_KEY` | Clasificación de intención | Consumo a cargo de la cuenta |
 | `N8N_API_KEY` | n8n → backend | Acceso a datos de clientes vía `wa-bridge` |
 | `BOT_WA_SEND_TOKEN` | backend → bot-wa | Envío de mensajes desde el número del negocio |
+| `SUPABASE_SERVICE_ROLE_KEY` | Backend → Supabase Storage (fotos de recepción) | Acceso total al proyecto de Supabase por su API, incluidas las fotos y la base. Sólo en Render, nunca en el panel; si se filtra, se rota en Supabase y se actualiza en Render |
 
 Reglas:
 
