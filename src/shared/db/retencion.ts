@@ -17,6 +17,10 @@
 import * as db from './index';
 import { config } from '../../config';
 import logger from '../utils/logger';
+import { obtenerAlmacen } from '../storage/fotos';
+
+/** Días que se conservan las fotos de recepción. 0 desactiva la purga. */
+const DIAS_FOTOS = config.DATA_RETENTION_PHOTOS_DAYS;
 
 /** Meses que se conservan las conversaciones. 0 desactiva la purga. */
 const MESES_MENSAJES = config.DATA_RETENTION_MESSAGES_MONTHS;
@@ -143,7 +147,62 @@ export async function anonimizarCliente(
      WHERE tenant_id = $1 AND id = $2 AND anonymized_at IS NULL`,
     [tenantId, customerId],
   );
-  return (rowCount ?? 0) > 0;
+  const hecho = (rowCount ?? 0) > 0;
+  if (hecho) {
+    // Las fotos de su vehículo también son datos suyos (la placa se ve). Se
+    // conservan sólo las de un turno con reclamo abierto: ahí hay un deber de
+    // conservar la prueba, que es la excepción que la Ley 1581 contempla.
+    const { rows } = await db.query<{ id: string; storage_path: string }>(
+      `SELECT p.id, p.storage_path FROM appointment_photos p
+         JOIN appointments a ON a.id = p.appointment_id
+        WHERE a.tenant_id = $1 AND a.customer_id = $2 AND a.reclamo_abierto_at IS NULL`,
+      [tenantId, customerId],
+    );
+    await borrarFotos(rows, 'supresión del cliente');
+  }
+  return hecho;
+}
+
+/**
+ * Borra fotos: primero los archivos, después las filas. Si Storage falla, las
+ * filas quedan y la purga diaria lo vuelve a intentar; al revés quedarían
+ * archivos sin nadie que sepa que existen.
+ */
+async function borrarFotos(fotos: Array<{ id: string; storage_path: string }>, motivo: string): Promise<number> {
+  if (fotos.length === 0) return 0;
+  const almacen = obtenerAlmacen();
+  if (!almacen) return 0;
+  try {
+    await almacen.borrar(fotos.map((f) => f.storage_path));
+  } catch (err) {
+    logger.error({ err, motivo, fotos: fotos.length }, 'No se pudieron borrar fotos de Storage; se reintenta en la próxima purga');
+    return 0;
+  }
+  await db.query('DELETE FROM appointment_photos WHERE id = ANY($1::uuid[])', [fotos.map((f) => f.id)]);
+  return fotos.length;
+}
+
+/**
+ * Borra las fotos de recepción más viejas que el plazo, salvo las de turnos con
+ * reclamo abierto. De a 500 por corrida para no mandar un borrado gigante a
+ * Storage; si hay más, siguen al día siguiente.
+ *
+ * Recorre todos los lavaderos: corre con bypass de RLS (ver cron.ts).
+ */
+export async function purgarFotosViejas(dias: number = DIAS_FOTOS): Promise<number> {
+  if (dias <= 0) return 0;
+  const { rows } = await db.query<{ id: string; storage_path: string }>(
+    `SELECT p.id, p.storage_path FROM appointment_photos p
+       JOIN appointments a ON a.id = p.appointment_id
+      WHERE p.created_at < NOW() - make_interval(days => $1)
+        AND a.reclamo_abierto_at IS NULL
+      ORDER BY p.created_at
+      LIMIT 500`,
+    [dias],
+  );
+  const borradas = await borrarFotos(rows, 'retención');
+  if (borradas > 0) logger.info({ borradas, dias }, 'Fotos de recepción borradas por retención');
+  return borradas;
 }
 
 /**
@@ -203,4 +262,5 @@ export const politicaRetencion = {
   mesesMensajes: MESES_MENSAJES,
   mesesClientes: MESES_CLIENTES,
   mesesAuditoria: MESES_AUDITORIA,
+  diasFotos: DIAS_FOTOS,
 };

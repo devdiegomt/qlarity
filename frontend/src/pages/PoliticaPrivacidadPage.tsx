@@ -15,7 +15,7 @@ import PaginaLegal, { Dato, Seccion } from '../components/PaginaLegal';
 import { RESPONSABLE, VERSION_POLITICA, VIGENTE_DESDE } from '../lib/responsable';
 
 const ENCARGADOS: Array<{ quien: string; para: string; donde: string }> = [
-  { quien: 'Supabase', para: 'Base de datos donde se guarda todo lo que registra el panel', donde: 'Estados Unidos (Oregón)' },
+  { quien: 'Supabase', para: 'Base de datos donde se guarda todo lo que registra el panel, y las fotos de recepción', donde: 'Estados Unidos (Oregón)' },
   { quien: 'Render', para: 'Servidor que atiende al panel y procesa los datos', donde: 'Estados Unidos (Oregón)' },
   { quien: 'Vercel', para: 'Publicación del panel web', donde: 'Estados Unidos y red global' },
   { quien: 'GitHub', para: 'Respaldos diarios de la base, cifrados', donde: 'Estados Unidos' },
@@ -75,6 +75,7 @@ export default function PoliticaPrivacidadPage() {
         <ul className="list-disc pl-5 space-y-1">
           <li>Nombre, teléfono, correo y, si el cliente lo da, su número de documento.</li>
           <li>Placa, tipo, marca, modelo, color y año de sus vehículos.</li>
+          <li>Fotos del estado del vehículo cuando el lavadero lo recibe, que pueden mostrar la placa.</li>
           <li>Turnos, servicios, pagos e historial.</li>
           <li>Si el lavadero usa el bot de WhatsApp: el texto de los mensajes que el cliente escribe.</li>
           <li>Cuándo, cómo y bajo qué versión del aviso el cliente autorizó el tratamiento de sus datos.</li>
@@ -157,6 +158,7 @@ export default function PoliticaPrivacidadPage() {
         <ul className="list-disc pl-5 space-y-1">
           <li>Las cuentas y los datos del lavadero, mientras use el servicio y lo que exijan las obligaciones legales después.</li>
           <li>Los mensajes de WhatsApp, 12 meses; después se borran.</li>
+          <li>Las fotos del estado del vehículo, 90 días; después se borran, salvo que haya un reclamo abierto por ese servicio, mientras dure.</li>
           <li>El registro de acciones del panel, 24 meses.</li>
           <li>Los respaldos de la base, 30 días.</li>
           <li>Las facturas electrónicas, el tiempo que exige la DIAN.</li>

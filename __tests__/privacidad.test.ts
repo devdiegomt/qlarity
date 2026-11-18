@@ -10,7 +10,7 @@
 import request from 'supertest';
 import app from '../src/index';
 import * as db from '../src/shared/db';
-import { VERSION_AVISO_LAVADERO } from '../src/modules/whatsapp/consentimiento';
+import { VERSION_AVISO_LAVADERO, VERSION_POLITICA_QLARITY } from '../src/modules/whatsapp/consentimiento';
 
 let token: string;
 let serviceId: string;
@@ -190,7 +190,7 @@ describe('registrar un lavadero', () => {
       [res.body.tenant.id],
     );
     expect(rows).toHaveLength(1);
-    expect(rows[0].metadata.version).toBe('2026-11-v1');
+    expect(rows[0].metadata.version).toBe(VERSION_POLITICA_QLARITY);
     expect(rows[0].metadata.aceptadaEn).toBeTruthy();
   });
 });

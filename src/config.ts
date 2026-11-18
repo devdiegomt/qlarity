@@ -125,6 +125,19 @@ const envSchema = z.object({
   // del empleado — de ahi que tenga plazo y no sea para siempre.
   DATA_RETENTION_AUDIT_MONTHS: z.coerce.number().int().min(0).default(24),
 
+  // Fotos de recepción: días que se guardan. Las de un turno con reclamo
+  // abierto no se borran. 0 desactiva la purga.
+  DATA_RETENTION_PHOTOS_DAYS: z.coerce.number().int().min(0).default(90),
+
+  // ── Fotos (Supabase Storage) ─────────────────────────────────────────────
+  // Sin las dos primeras, en producción las fotos quedan desactivadas (el disco
+  // de Render se borra en cada despliegue); en desarrollo y pruebas se guardan
+  // en FOTOS_DIR. Ver shared/storage/fotos.ts.
+  SUPABASE_URL: z.string().url().optional(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+  FOTOS_BUCKET: z.string().default('fotos-recepcion'),
+  FOTOS_DIR: z.string().optional(),
+
   // ── Sesión en cookie ─────────────────────────────────────────────────────
   // El refresh token va en una cookie httpOnly, no en localStorage, para que un
   // XSS no se lleve siete días de sesión renovable. Ver modules/auth/cookies.ts.
