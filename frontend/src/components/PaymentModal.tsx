@@ -1,5 +1,7 @@
 // ─── PaymentModal.tsx ─────────────────────────────────────────────────────────
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Gift } from 'lucide-react';
+import type { Sellos } from './SellosCliente';
 import { api } from '../lib/api';
 import { formatCOP } from '../lib/format';
 import type { PaymentMethod } from '../types';
@@ -15,6 +17,8 @@ interface AppointmentForPayment {
   customer_first_name?: string;
   customer_last_name?: string | null;
   total_amount?: number; // alias
+  /** Adicionales del turno: con el premio de sellos son lo único que se cobra. */
+  adicionales?: Array<{ precio: number }>;
 }
 
 interface PaymentModalProps {
@@ -32,14 +36,32 @@ export default function PaymentModal({ appointment, onClose, onSaved }: PaymentM
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const amountCentavos = Math.round(parseFloat(String(amountPesos) || '0') * 100);
+  // Tarjeta de sellos: si el cliente completó la meta, este lavado es gratis
+  // (los adicionales se cobran). El backend vuelve a comprobarlo y calcula el
+  // monto; acá sólo se muestra.
+  const [sellos, setSellos] = useState<Sellos | null>(null);
+  const [aplicarPremio, setAplicarPremio] = useState(false);
+  useEffect(() => {
+    api<Sellos>(`/appointments/${appointment.id}/fidelidad`)
+      .then((s) => {
+        setSellos(s);
+        setAplicarPremio(s.premioDisponible);
+      })
+      .catch(() => setSellos(null));
+  }, [appointment.id]);
+  const adicionales = (appointment.adicionales ?? []).reduce((t, a) => t + a.precio, 0);
+
+  const amountCentavos = aplicarPremio ? adicionales : Math.round(parseFloat(String(amountPesos) || '0') * 100);
 
   const handleSave = async () => {
     setError(''); setLoading(true);
     try {
       await api('/payments', {
         method: 'POST',
-        body: { appointmentId: appointment.id, amount: amountCentavos, paymentMethod: method, notes: notes || undefined },
+        body: {
+          appointmentId: appointment.id, amount: amountCentavos, paymentMethod: method, notes: notes || undefined,
+          premio: aplicarPremio,
+        },
       });
       onSaved?.();
     } catch (err) { setError((err as Error).message); }
@@ -62,7 +84,26 @@ export default function PaymentModal({ appointment, onClose, onSaved }: PaymentM
           <p className="text-xs text-gray-500">{appointment.customer_first_name} {appointment.customer_last_name}</p>
         </div>
 
-        <div>
+        {sellos && sellos.meta > 0 && (
+          sellos.premioDisponible ? (
+            <label className="flex items-start gap-3 rounded-xl border border-green-600/40 bg-green-50 p-3 cursor-pointer">
+              <input type="checkbox" checked={aplicarPremio} onChange={(e) => setAplicarPremio(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0" />
+              <span className="text-sm text-gray-800">
+                <span className="flex items-center gap-1.5 font-semibold text-green-800">
+                  <Gift size={15} aria-hidden="true" /> ¡Lavado gratis por fidelidad!
+                </span>
+                Completó {sellos.meta - 1} lavados: este va por cuenta del lavadero.
+                {adicionales > 0 && <> Los adicionales ({formatCOP(adicionales)}) sí se cobran.</>}
+              </span>
+            </label>
+          ) : (
+            <p className="text-xs text-gray-600" data-testid="sellos-cobro">
+              Sellos: {sellos.sellos} de {sellos.meta - 1}. Con este pago le {sellos.faltan - 1 <= 0 ? 'queda el próximo lavado gratis' : `faltarán ${sellos.faltan - 1} para el lavado gratis`}.
+            </p>
+          )
+        )}
+
+        {!aplicarPremio && <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">Monto en pesos</label>
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">$</span>
@@ -70,7 +111,7 @@ export default function PaymentModal({ appointment, onClose, onSaved }: PaymentM
               onChange={(e) => setAmountPesos(Number(e.target.value))}
               className="w-full pl-7 pr-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none" />
           </div>
-        </div>
+        </div>}
 
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-2">Método de pago</label>
@@ -93,9 +134,9 @@ export default function PaymentModal({ appointment, onClose, onSaved }: PaymentM
             className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none" />
         </div>
 
-        <button onClick={handleSave} disabled={loading || !amountCentavos}
+        <button onClick={handleSave} disabled={loading || (!aplicarPremio && !amountCentavos)}
           className="w-full py-3 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg transition disabled:opacity-50 text-sm">
-          {loading ? 'Registrando...' : `Cobrar ${formatCOP(amountCentavos)}`}
+          {loading ? 'Registrando...' : aplicarPremio && amountCentavos === 0 ? 'Entregar gratis' : `Cobrar ${formatCOP(amountCentavos)}`}
         </button>
       </div>
     </div>

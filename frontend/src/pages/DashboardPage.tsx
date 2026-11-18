@@ -9,6 +9,7 @@ import { ESTADOS, Placa, PuntoEstado } from '../lib/estados';
 import { CalendarDays, Columns3, History, Plus, Users, type LucideIcon } from 'lucide-react';
 import type { AppointmentStatus } from '../types';
 import ProximasReservas from '../components/ProximasReservas';
+import ClientesSinVolver from '../components/ClientesSinVolver';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -97,6 +98,7 @@ export default function DashboardPage() {
       {/* Live board summary */}
       <LiveBoardSummary />
       <ProximasReservas />
+      <ClientesSinVolver />
 
       {/* Accesos */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

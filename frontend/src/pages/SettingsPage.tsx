@@ -26,6 +26,8 @@ interface Tenant {
   closing_time: string | null;
   bays_count: number;
   google_review_url: string | null;
+  fidelidad_sellos_meta: number;
+  fidelidad_dias_regreso: number;
 }
 
 interface Service {
@@ -137,6 +139,8 @@ function GeneralTab() {
           closing_time: tenant.closing_time,
           bays_count:   typeof tenant.bays_count === 'string' ? parseInt(tenant.bays_count, 10) : tenant.bays_count,
           google_review_url: tenant.google_review_url ?? '',
+          fidelidad_sellos_meta: Number(tenant.fidelidad_sellos_meta) || 0,
+          fidelidad_dias_regreso: Number(tenant.fidelidad_dias_regreso) || 0,
         },
       });
       setTenant(updated);
@@ -175,6 +179,26 @@ function GeneralTab() {
         <Field label="Hora cierre"       value={tenant.closing_time ?? '19:00'}   onChange={(v) => set('closing_time', v)} type="time" />
         <Field label="Número de bahías"  value={String(tenant.bays_count ?? 3)}   onChange={(v) => set('bays_count', parseInt(v, 10) || 3)} type="number" />
       </div>
+
+      <SectionTitle>Fidelización</SectionTitle>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Field
+          label="Lavado gratis cada (lavados)"
+          value={String(tenant.fidelidad_sellos_meta ?? 6)}
+          onChange={(v) => set('fidelidad_sellos_meta', parseInt(v, 10) || 0)}
+          type="number"
+        />
+        <Field
+          label="Avisar si no vuelven en (días)"
+          value={String(tenant.fidelidad_dias_regreso ?? 30)}
+          onChange={(v) => set('fidelidad_dias_regreso', parseInt(v, 10) || 0)}
+          type="number"
+        />
+      </div>
+      <p className="text-xs text-gray-500 -mt-2">
+        Con 6, el sexto lavado es gratis: cada lavado pagado suma un sello y el premio se aplica al cobrar. Los
+        clientes que llevan más días sin venir aparecen en Inicio para invitarlos por WhatsApp. 0 apaga cada uno.
+      </p>
 
       <SectionTitle>Reseñas en Google</SectionTitle>
       <Field
