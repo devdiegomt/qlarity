@@ -1,3 +1,4 @@
+import * as tiquetera from '../fidelizacion/tiquetera';
 import * as fidelizacion from '../fidelizacion/fidelizacion';
 import { Router } from 'express';
 import * as ctrl from './customers.controller';
@@ -22,5 +23,7 @@ router.get('/:id/vehicles',    validarUuid('id'), asyncHandler(ctrl.getVehicles)
 router.get('/:id/history',     validarUuid('id'), asyncHandler(ctrl.getHistory));
 router.get('/:id/fidelidad',   validarUuid('id'), asyncHandler(fidelizacion.fidelidadDeCliente));
 router.post('/:id/invitado',   validarUuid('id'), asyncHandler(fidelizacion.marcarInvitado));
+router.get('/:id/tiqueteras',  validarUuid('id'), asyncHandler(tiquetera.tiqueterasDeCliente));
+router.post('/:id/tiqueteras', validarUuid('id'), validate(tiquetera.esquemaVenta), asyncHandler(tiquetera.venderTiquetera));
 
 export default router;

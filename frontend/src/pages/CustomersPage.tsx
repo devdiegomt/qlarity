@@ -1,3 +1,4 @@
+import TiqueteraCliente from '../components/TiqueteraCliente';
 import { useState, useEffect, useCallback, type HTMLInputTypeAttribute } from 'react';
 import { Users, X } from 'lucide-react';
 import { api } from '../lib/api';
@@ -35,6 +36,7 @@ const emptyForm = (): CustomerFormData => ({
 // ─── CustomersPage ────────────────────────────────────────────────────────────
 
 export default function CustomersPage() {
+  const [tiqueteraDe, setTiqueteraDe] = useState<{ id: string; nombre: string } | null>(null);
   const toast = useToast();
   const [customers, setCustomers]   = useState<Customer[]>([]);
   const [loading, setLoading]       = useState(true);
@@ -179,6 +181,12 @@ export default function CustomersPage() {
               </div>
               <div className="flex gap-2 shrink-0">
                 <button
+                  onClick={() => setTiqueteraDe({ id: c.id, nombre: `${c.first_name} ${c.last_name ?? ''}`.trim() })}
+                  className="text-xs text-brand-600 hover:text-brand-800 px-2 py-1 rounded transition"
+                >
+                  Tiquetera
+                </button>
+                <button
                   onClick={() => openEdit(c)}
                   className="text-xs text-brand-600 hover:text-brand-800 px-2 py-1 rounded transition"
                 >
@@ -272,6 +280,7 @@ export default function CustomersPage() {
           onConfirm={confirmDelete}
         />
       )}
+      {tiqueteraDe && <TiqueteraCliente cliente={tiqueteraDe} onClose={() => setTiqueteraDe(null)} />}
     </div>
   );
 }

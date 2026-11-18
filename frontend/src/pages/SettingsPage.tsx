@@ -1,3 +1,4 @@
+import PaquetesTiquetera from '../components/PaquetesTiquetera';
 import { useState, useEffect, useCallback, type HTMLInputTypeAttribute, type ReactNode } from 'react';
 import { Check, Copy, ExternalLink, Gem, Minus, Sparkles, Store, Users, X, type LucideIcon } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
@@ -361,6 +362,7 @@ function ServicesTab() {
 
   return (
     <div className="space-y-4">
+      <PaquetesTiquetera servicios={services} />
       <div className="flex justify-between items-center gap-3 flex-wrap">
         <p className="text-sm text-gray-500">
           {services.length} servicios ·{' '}

@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Gift } from 'lucide-react';
 import type { Sellos } from './SellosCliente';
+import { fechaCorta } from '../lib/fechas';
 import { api } from '../lib/api';
 import { formatCOP } from '../lib/format';
 import type { PaymentMethod } from '../types';
@@ -41,6 +42,10 @@ export default function PaymentModal({ appointment, onClose, onSaved }: PaymentM
   // monto; acá sólo se muestra.
   const [sellos, setSellos] = useState<Sellos | null>(null);
   const [aplicarPremio, setAplicarPremio] = useState(false);
+  // Tiqueteras del cliente que sirven para este turno (mismo servicio, con
+  // saldo, sin vencer). Excluyente con el premio.
+  const [tiqueteras, setTiqueteras] = useState<Array<{ id: string; nombre: string; quedan: number; cantidad: number; vence_el: string | null }>>([]);
+  const [tiqueteraId, setTiqueteraId] = useState<string | null>(null);
   useEffect(() => {
     api<Sellos>(`/appointments/${appointment.id}/fidelidad`)
       .then((s) => {
@@ -48,10 +53,22 @@ export default function PaymentModal({ appointment, onClose, onSaved }: PaymentM
         setAplicarPremio(s.premioDisponible);
       })
       .catch(() => setSellos(null));
+    api<typeof tiqueteras>(`/appointments/${appointment.id}/tiqueteras`)
+      .then((l) => {
+        setTiqueteras(l);
+        // Si compró una tiquetera, la idea es usarla: queda elegida, salvo que
+        // tenga el premio de sellos, que va primero.
+        setTiqueteraId((actual) => actual ?? l[0]?.id ?? null);
+      })
+      .catch(() => setTiqueteras([]));
   }, [appointment.id]);
+  // El premio va primero: si está marcado, la tiquetera no se usa (aunque haya
+  // quedado elegida porque cargó antes o después).
+  const tiqueteraUsada = aplicarPremio ? null : tiqueteraId;
   const adicionales = (appointment.adicionales ?? []).reduce((t, a) => t + a.precio, 0);
 
-  const amountCentavos = aplicarPremio ? adicionales : Math.round(parseFloat(String(amountPesos) || '0') * 100);
+  const sinCobrarLavado = aplicarPremio || tiqueteraUsada !== null;
+  const amountCentavos = sinCobrarLavado ? adicionales : Math.round(parseFloat(String(amountPesos) || '0') * 100);
 
   const handleSave = async () => {
     setError(''); setLoading(true);
@@ -61,6 +78,7 @@ export default function PaymentModal({ appointment, onClose, onSaved }: PaymentM
         body: {
           appointmentId: appointment.id, amount: amountCentavos, paymentMethod: method, notes: notes || undefined,
           premio: aplicarPremio,
+          tiqueteraId: tiqueteraUsada ?? undefined,
         },
       });
       onSaved?.();
@@ -98,12 +116,38 @@ export default function PaymentModal({ appointment, onClose, onSaved }: PaymentM
             </label>
           ) : (
             <p className="text-xs text-gray-600" data-testid="sellos-cobro">
-              Sellos: {sellos.sellos} de {sellos.meta - 1}. Con este pago le {sellos.faltan - 1 <= 0 ? 'queda el próximo lavado gratis' : `faltarán ${sellos.faltan - 1} para el lavado gratis`}.
+              Sellos: {sellos.sellos} de {sellos.meta - 1}.{' '}
+              {tiqueteraUsada
+                ? 'Lo que se paga con tiquetera no suma sello: ya tiene descuento.'
+                : `Con este pago le ${sellos.faltan - 1 <= 0 ? 'queda el próximo lavado gratis' : `faltarán ${sellos.faltan - 1} para el lavado gratis`}.`}
             </p>
           )
         )}
 
-        {!aplicarPremio && <div>
+        {tiqueteras.length > 0 && (
+          <div className="space-y-2" role="radiogroup" aria-label="Pagar con tiquetera">
+            {tiqueteras.map((t) => (
+              <label key={t.id} className={`flex items-start gap-3 rounded-xl border p-3 cursor-pointer ${tiqueteraUsada === t.id ? 'border-brand-600 bg-brand-50' : 'border-gray-200'}`}>
+                <input
+                  type="checkbox"
+                  checked={tiqueteraUsada === t.id}
+                  onChange={(e) => {
+                    setTiqueteraId(e.target.checked ? t.id : null);
+                    if (e.target.checked) setAplicarPremio(false);
+                  }}
+                  className="mt-0.5 h-4 w-4 shrink-0"
+                />
+                <span className="text-sm text-gray-800">
+                  <span className="block font-semibold text-gray-900">Usar tiquetera: {t.nombre}</span>
+                  Le quedan {t.quedan} de {t.cantidad}{t.vence_el ? ` · vence el ${fechaCorta(t.vence_el)}` : ''}.
+                  {adicionales > 0 && <> Los adicionales ({formatCOP(adicionales)}) se cobran aparte.</>}
+                </span>
+              </label>
+            ))}
+          </div>
+        )}
+
+        {!sinCobrarLavado && <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">Monto en pesos</label>
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">$</span>
@@ -113,7 +157,7 @@ export default function PaymentModal({ appointment, onClose, onSaved }: PaymentM
           </div>
         </div>}
 
-        <div>
+        {(!sinCobrarLavado || amountCentavos > 0) && <div>
           <label className="block text-xs font-medium text-gray-600 mb-2">Método de pago</label>
           <div className="grid grid-cols-3 gap-2">
             {METHODS.map((m) => (
@@ -125,7 +169,7 @@ export default function PaymentModal({ appointment, onClose, onSaved }: PaymentM
               </button>
             ))}
           </div>
-        </div>
+        </div>}
 
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">Notas (opcional)</label>
@@ -134,9 +178,9 @@ export default function PaymentModal({ appointment, onClose, onSaved }: PaymentM
             className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none" />
         </div>
 
-        <button onClick={handleSave} disabled={loading || (!aplicarPremio && !amountCentavos)}
+        <button onClick={handleSave} disabled={loading || (!sinCobrarLavado && !amountCentavos)}
           className="w-full py-3 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg transition disabled:opacity-50 text-sm">
-          {loading ? 'Registrando...' : aplicarPremio && amountCentavos === 0 ? 'Entregar gratis' : `Cobrar ${formatCOP(amountCentavos)}`}
+          {loading ? 'Registrando...' : sinCobrarLavado && amountCentavos === 0 ? (tiqueteraUsada ? 'Entregar con tiquetera' : 'Entregar gratis') : `Cobrar ${formatCOP(amountCentavos)}`}
         </button>
       </div>
     </div>

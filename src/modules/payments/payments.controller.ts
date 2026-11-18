@@ -1,3 +1,4 @@
+import { usarTiquetera } from '../fidelizacion/tiquetera';
 import { sellosDe } from '../fidelizacion/fidelizacion';
 import type { Request, Response } from 'express';
 import * as db from '../../shared/db';
@@ -108,7 +109,8 @@ export async function getById(req: Request, res: Response): Promise<void> {
 // ─── POST /api/payments ───────────────────────────────────────────────────────
 
 export async function create(req: Request, res: Response): Promise<void> {
-  const { appointmentId, amount, paymentMethod, notes, premio } = req.body as PaymentCreateBody;
+  const { appointmentId, amount, paymentMethod, notes, premio, tiqueteraId } = req.body as PaymentCreateBody;
+  if (premio && tiqueteraId) throw new AppError('Elige el premio de sellos o la tiquetera, no los dos', 400);
 
   const { rows: aptRows } = await db.query<{ id: string; status: string; price: number; customer_id: string }>(
     'SELECT id, status, price, customer_id FROM appointments WHERE id = $1 AND tenant_id = $2',
@@ -132,27 +134,45 @@ export async function create(req: Request, res: Response): Promise<void> {
   // Premio de la tarjeta de sellos: el lavado es gratis; los adicionales
   // («encera tú mismo») se cobran. El monto lo calcula el backend, no el panel,
   // y la elegibilidad se comprueba acá: no basta con que el panel diga que sí.
-  let monto = amount;
-  let descuento = 0;
-  if (premio) {
-    const s = await sellosDe(req.tenantId!, aptRows[0].customer_id);
-    if (!s.premioDisponible) throw new AppError('Este cliente todavía no tiene el premio de fidelidad', 409, { codigo: 'SIN_PREMIO' });
-    const { rows: ex } = await db.query<{ total: string }>(
-      'SELECT COALESCE(SUM(price), 0) AS total FROM appointment_extras WHERE appointment_id = $1',
-      [appointmentId],
+  // Con tiquetera, descontar el lavado y registrar el pago van juntos: si el
+  // pago falla, el lavado no se pierde. (La conexión de la petición es una
+  // sola, así que BEGIN/COMMIT por db.query la abarcan.)
+  if (tiqueteraId) await db.query('BEGIN');
+  try {
+    let monto = amount;
+    let descuento = 0;
+    // Con premio o con tiquetera el lavado no se cobra; los adicionales sí.
+    const soloAdicionales = async () => {
+      const { rows: ex } = await db.query<{ total: string }>(
+        'SELECT COALESCE(SUM(price), 0) AS total FROM appointment_extras WHERE appointment_id = $1',
+        [appointmentId],
+      );
+      const adicionales = parseInt(ex[0].total, 10);
+      descuento = Math.max(0, aptRows[0].price - adicionales);
+      monto = aptRows[0].price - descuento;
+    };
+    if (premio) {
+      const s = await sellosDe(req.tenantId!, aptRows[0].customer_id);
+      if (!s.premioDisponible) throw new AppError('Este cliente todavía no tiene el premio de fidelidad', 409, { codigo: 'SIN_PREMIO' });
+      await soloAdicionales();
+    } else if (tiqueteraId) {
+      await usarTiquetera(req.tenantId!, appointmentId, tiqueteraId);
+      await soloAdicionales();
+    } else if (amount <= 0) {
+      throw new AppError('El monto debe ser mayor a 0', 400);
+    }
+
+    const { rows } = await db.query<PaymentRow>(
+      `INSERT INTO payments (tenant_id, appointment_id, amount, payment_method, received_by, notes, origen, descuento, tiquetera_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      [req.tenantId, appointmentId, monto, paymentMethod, req.user!.id, notes?.trim() ?? null,
+       premio ? 'premio' : tiqueteraId ? 'tiquetera' : 'normal', descuento, tiqueteraId ?? null],
     );
-    const adicionales = parseInt(ex[0].total, 10);
-    descuento = Math.max(0, aptRows[0].price - adicionales);
-    monto = aptRows[0].price - descuento;
-  } else if (amount <= 0) {
-    throw new AppError('El monto debe ser mayor a 0', 400);
+    if (tiqueteraId) await db.query('COMMIT');
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    if (tiqueteraId) await db.query('ROLLBACK').catch(() => undefined);
+    throw err;
   }
 
-  const { rows } = await db.query<PaymentRow>(
-    `INSERT INTO payments (tenant_id, appointment_id, amount, payment_method, received_by, notes, origen, descuento)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-    [req.tenantId, appointmentId, monto, paymentMethod, req.user!.id, notes?.trim() ?? null, premio ? 'premio' : 'normal', descuento],
-  );
-
-  res.status(201).json(rows[0]);
 }

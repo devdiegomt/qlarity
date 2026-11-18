@@ -1,3 +1,4 @@
+import { ventasTiquetera } from '../fidelizacion/tiquetera';
 import type { Request, Response } from 'express';
 import * as db from '../../shared/db';
 import { getTenantToday } from '../../shared/utils/dateUtils';
@@ -82,8 +83,19 @@ export async function dashboard(req: Request, res: Response): Promise<void> {
   const r = rows[0];
   const prev = prevResult.rows[0];
 
-  const prevRevenue = parseInt(prev.total_revenue, 10);
-  const curRevenue  = parseInt(r.total_revenue, 10);
+  // Las tiqueteras entran a los ingresos el día que se venden, no cuando se
+  // usan (cada uso es un pago de $0 más los adicionales).
+  const rangeDays = Math.ceil((new Date(to).getTime() - new Date(from).getTime()) / 86_400_000) + 1;
+  const prevHasta = new Date(from); prevHasta.setDate(prevHasta.getDate() - 1);
+  const prevDesde = new Date(prevHasta); prevDesde.setDate(prevDesde.getDate() - rangeDays + 1);
+  const suma = (l: Array<{ total: number }>) => l.reduce((t, v) => t + v.total, 0);
+  const tiqueteras = suma(await ventasTiquetera(req.tenantId!, from, to));
+  const tiqueterasPrev = suma(await ventasTiquetera(
+    req.tenantId!, prevDesde.toISOString().split('T')[0], prevHasta.toISOString().split('T')[0],
+  ));
+
+  const prevRevenue = parseInt(prev.total_revenue, 10) + tiqueterasPrev;
+  const curRevenue  = parseInt(r.total_revenue, 10) + tiqueteras;
   const prevComp    = parseInt(prev.completed, 10);
   const curComp     = parseInt(r.completed, 10);
 
@@ -96,6 +108,7 @@ export async function dashboard(req: Request, res: Response): Promise<void> {
       unique_customers:    parseInt(r.unique_customers, 10),
       unique_vehicles:     parseInt(r.unique_vehicles, 10),
       total_revenue:       curRevenue,
+      tiquetera_revenue:   tiqueteras,
       total_payments:      parseInt(r.total_payments, 10),
       avg_service_minutes: r.avg_service_minutes ? Math.round(parseFloat(r.avg_service_minutes)) : null,
       avg_ticket:          r.avg_ticket ? parseInt(r.avg_ticket, 10) : 0,
@@ -113,7 +126,7 @@ export async function revenue(req: Request, res: Response): Promise<void> {
   const q = req.query as Record<string, string | undefined>;
   const { from, to } = await getDateRange(req.tenantId!, q.period, q.from, q.to);
 
-  type DailyRow  = { date: string; completed: string; total: string; revenue: string };
+  type DailyRow  = { date: string | Date; completed: string; total: string; revenue: string };
   type MethodRow = { payment_method: string; count: string; total: string };
   type HourRow   = { hour: string; count: string };
 
@@ -147,10 +160,34 @@ export async function revenue(req: Request, res: Response): Promise<void> {
     ),
   ]);
 
+  // Ventas de tiqueteras: suman al ingreso del día de la venta y a su método.
+  const ventas = await ventasTiquetera(req.tenantId!, from, to);
+  // pg devuelve DATE como Date a medianoche local: se lee en local, no en UTC.
+  const aFecha = (d: string | Date) =>
+    d instanceof Date
+      ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      : String(d).slice(0, 10);
+  const diario = daily.map((r) => {
+    const fecha = aFecha(r.date);
+    const extra = ventas.filter((v) => v.dia === fecha).reduce((t, v) => t + v.total, 0);
+    return { date: r.date, completed: parseInt(r.completed, 10), total: parseInt(r.total, 10), revenue: parseInt(r.revenue, 10) + extra };
+  });
+  for (const v of ventas) {
+    if (!diario.some((d) => aFecha(d.date) === v.dia)) {
+      diario.push({ date: v.dia, completed: 0, total: 0, revenue: v.total });
+    }
+  }
+  diario.sort((a, b) => aFecha(a.date).localeCompare(aFecha(b.date)));
+  const metodos = byMethod.map((r) => ({ method: r.payment_method, count: parseInt(r.count, 10), total: parseInt(r.total, 10) }));
+  for (const v of ventas) {
+    const m = metodos.find((x) => x.method === v.metodo);
+    if (m) { m.total += v.total; m.count += v.n; } else metodos.push({ method: v.metodo, count: v.n, total: v.total });
+  }
+
   res.json({
     period: { from, to },
-    daily:    daily.map((r) => ({ date: r.date, completed: parseInt(r.completed, 10), total: parseInt(r.total, 10), revenue: parseInt(r.revenue, 10) })),
-    byMethod: byMethod.map((r) => ({ method: r.payment_method, count: parseInt(r.count, 10), total: parseInt(r.total, 10) })),
+    daily:    diario,
+    byMethod: metodos.sort((a, b) => b.total - a.total),
     byHour:   byHour.map((r) => ({ hour: parseInt(r.hour, 10), count: parseInt(r.count, 10) })),
   });
 }
