@@ -76,6 +76,7 @@ export default function PoliticaPrivacidadPage() {
           <li>Nombre, teléfono, correo y, si el cliente lo da, su número de documento.</li>
           <li>Placa, tipo, marca, modelo, color y año de sus vehículos.</li>
           <li>Fotos del estado del vehículo cuando el lavadero lo recibe, que pueden mostrar la placa.</li>
+          <li>Si el cliente responde la encuesta de satisfacción: su calificación y su comentario.</li>
           <li>Turnos, servicios, pagos e historial.</li>
           <li>Si el lavadero usa el bot de WhatsApp: el texto de los mensajes que el cliente escribe.</li>
           <li>Cuándo, cómo y bajo qué versión del aviso el cliente autorizó el tratamiento de sus datos.</li>

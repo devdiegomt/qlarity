@@ -11,6 +11,7 @@ import PoliticaPrivacidadPage from './pages/PoliticaPrivacidadPage';
 import AvisoLavaderoPage from './pages/AvisoLavaderoPage';
 import ReservarPage from './pages/ReservarPage';
 import CalculadoraPage from './pages/CalculadoraPage';
+import CalificarPage from './pages/CalificarPage';
 import DashboardPage from './pages/DashboardPage';
 import AppointmentsPage from './pages/AppointmentsPage';
 import BoardPage from './pages/BoardPage';
@@ -41,6 +42,8 @@ function AppRoutes() {
       <Route path="/reservar/:slug" element={<ReservarPage />} />
       {/* Para dueños que están empezando: cuánto cobrar por un servicio. */}
       <Route path="/calculadora" element={<CalculadoraPage />} />
+      {/* La encuesta que le llega al cliente por WhatsApp. */}
+      <Route path="/calificar/:token" element={<CalificarPage />} />
 
       {/* App del tenant */}
       <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>

@@ -412,6 +412,13 @@ producción):
 | JSON roto, cuerpo de 2 MB | 400 y 413 (antes **500**, en toda la API) |
 | `__proto__` en el cuerpo | Sin efecto (Zod descarta las claves que no conoce) |
 
+**La encuesta de satisfacción, desde 2026-11.** `/api/publico/calificaciones/:token`
+usa el mismo esquema que la página de reservas (`abrirContextoResolviendo`): la
+puerta de atrás sólo traduce el token a un lavadero, y lo demás pasa por RLS. El
+token es aleatorio de 128 bits, uno por turno; la página muestra el lavadero, el
+servicio y la fecha, nunca datos del cliente, y la respuesta se guarda una sola
+vez (la condición va en el `UPDATE`). Lo prueba `resenas.test.ts`.
+
 **Los bypasses son el punto débil, y hay que tratarlos como tal.** Ahí el
 aislamiento no lo sostiene el motor sino una línea de `authorize` o el orden del
 código. `superadmin` —ocho rutas, el módulo que más poder concentra— **no tenía

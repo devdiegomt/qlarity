@@ -1,3 +1,4 @@
+import CalificacionesResumen from "../components/CalificacionesResumen";
 import { CircleCheck, ReceiptText, Users, Wallet, type LucideIcon } from 'lucide-react';
 import { useState, useEffect, useCallback } from "react";
 import { api } from "../lib/api";
@@ -429,6 +430,8 @@ export default function ReportsPage() {
           )}
         </>
       ) : null}
+      {/* Independiente del período de arriba: siempre los últimos 30 días. */}
+      <CalificacionesResumen />
     </div>
   );
 }

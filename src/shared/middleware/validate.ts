@@ -473,6 +473,16 @@ export const schemas = {
       whatsapp_enabled: z.boolean().optional(),
       whatsapp_phone: phone.optional().nullable(),
       whatsapp_provider: optStrParche(20),
+      // Enlace de reseñas de Google. Vacío lo borra; si viene, tiene que ser
+      // https: se le muestra al cliente como botón.
+      google_review_url: z
+        .string()
+        .trim()
+        .max(500)
+        .transform((v) => v || null)
+        .refine((v) => v === null || /^https:\/\/[^\s]+$/.test(v), 'El enlace de Google tiene que empezar por https://')
+        .nullable()
+        .optional(),
     })
     .passthrough(),
 

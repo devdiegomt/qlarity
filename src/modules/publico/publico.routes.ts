@@ -22,7 +22,8 @@ import type { Request, Response } from 'express';
 import * as db from '../../shared/db';
 import { AppError } from '../../shared/middleware/errorHandler';
 import { asyncHandler } from '../../shared/utils/asyncHandler';
-import { conBypassRls, abrirContextoPorSlug } from '../../shared/middleware/rls';
+import { conBypassRls, abrirContextoPorSlug, abrirContextoResolviendo } from '../../shared/middleware/rls';
+import { FORMA_TOKEN, esquemaRespuesta, irAGoogle, responder, verEncuesta } from '../resenas/resenas';
 import { validate } from '../../shared/middleware/validate';
 import { datosParaReservar, horarios, reservar, esquemaReserva } from './reservas';
 
@@ -76,5 +77,19 @@ router.post(
   abrirContextoPorSlug,
   asyncHandler(reservar),
 );
+
+// ─── Encuesta de satisfacción ────────────────────────────────────────────────
+// Por el token del enlace: aleatorio, uno por turno. Como en las reservas, la
+// puerta de atrás sólo traduce el token a un lavadero; lo demás pasa por RLS.
+const porToken = abrirContextoResolviendo(
+  (req) => (FORMA_TOKEN.test(String(req.params.token ?? '')) ? String(req.params.token) : null),
+  `SELECT r.tenant_id AS id FROM appointment_reviews r
+     JOIN tenants t ON t.id = r.tenant_id
+    WHERE r.token = $1 AND t.is_active = true`,
+  'Encuesta no encontrada',
+);
+router.get('/calificaciones/:token', porToken, asyncHandler(verEncuesta));
+router.post('/calificaciones/:token', validate(esquemaRespuesta), porToken, asyncHandler(responder));
+router.post('/calificaciones/:token/google', porToken, asyncHandler(irAGoogle));
 
 export default router;

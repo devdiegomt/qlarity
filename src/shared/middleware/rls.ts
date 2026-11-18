@@ -240,78 +240,93 @@ export function conBypassRls(motivo: string): RequestHandler {
  * Un slug con forma inválida o de un lavadero inactivo responde 404, igual que
  * uno que no existe.
  */
-export async function abrirContextoPorSlug(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
-  const slug = String(req.params.slug ?? '').toLowerCase();
-  if (!/^[a-z0-9-]{1,80}$/.test(slug)) {
-    res.status(404).json({ error: 'Lavadero no encontrado' });
-    return;
-  }
+export const abrirContextoPorSlug = abrirContextoResolviendo(
+  (req) => {
+    const slug = String(req.params.slug ?? '').toLowerCase();
+    return /^[a-z0-9-]{1,80}$/.test(slug) ? slug : null;
+  },
+  'SELECT id FROM tenants WHERE slug = $1 AND is_active = true',
+  'Lavadero no encontrado',
+);
 
-  const seCorto = vigilarCierre(res);
-
-  let cliente: PoolClient;
-  try {
-    cliente = await pool.connect();
-  } catch (err) {
-    seCorto();
-    logger.error({ err }, 'No se pudo tomar una conexión para la página pública');
-    next(err);
-    return;
-  }
-
-  let tenantId: string | null = null;
-  try {
-    await cliente.query('BEGIN');
-    // `true`: local a la transacción. Al COMMIT o ROLLBACK vuelve a vacío.
-    await cliente.query(`SELECT set_config('app.bypass_rls', 'on', true)`);
-    const { rows } = await cliente.query<{ id: string }>(
-      'SELECT id FROM tenants WHERE slug = $1 AND is_active = true',
-      [slug],
-    );
-    await cliente.query('COMMIT');
-    tenantId = rows[0]?.id ?? null;
-    if (tenantId) {
-      await cliente.query('SELECT set_config($1, $2, false)', ['app.tenant_id', tenantId]);
+/**
+ * Lo mismo para cualquier ruta pública que llegue con un identificador propio
+ * —un slug, el token de una encuesta— en vez de una sesión: `clave` lo saca de
+ * la petición (o devuelve null si tiene una forma inválida) y `consulta`, con
+ * `$1`, devuelve el `id` del lavadero. Esa consulta es lo único que corre con la
+ * puerta de atrás; después la conexión queda con `app.tenant_id` fijado.
+ */
+export function abrirContextoResolviendo(
+  clave: (req: Request) => string | null,
+  consulta: string,
+  noEncontrado: string,
+): RequestHandler {
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const valor = clave(req);
+    if (!valor) {
+      res.status(404).json({ error: noEncontrado });
+      return;
     }
-  } catch (err) {
-    seCorto();
-    await cliente.query('ROLLBACK').catch(() => undefined);
-    devolverAlPool(cliente, 'app.tenant_id', req.originalUrl);
-    next(err);
-    return;
-  }
 
-  if (seCorto()) {
-    devolverAlPool(cliente, 'app.tenant_id', req.originalUrl);
-    return;
-  }
-  if (!tenantId) {
-    devolverAlPool(cliente, 'app.tenant_id', req.originalUrl);
-    res.status(404).json({ error: 'Lavadero no encontrado' });
-    return;
-  }
+    const seCorto = vigilarCierre(res);
 
-  req.tenantId = tenantId;
+    let cliente: PoolClient;
+    try {
+      cliente = await pool.connect();
+    } catch (err) {
+      seCorto();
+      logger.error({ err }, 'No se pudo tomar una conexión para la página pública');
+      next(err);
+      return;
+    }
 
-  let liberada = false;
-  const liberar = (): void => {
-    if (liberada) return;
-    liberada = true;
-    devolverAlPool(cliente, 'app.tenant_id', req.originalUrl);
+    let tenantId: string | null = null;
+    try {
+      await cliente.query('BEGIN');
+      // `true`: local a la transacción. Al COMMIT o ROLLBACK vuelve a vacío.
+      await cliente.query(`SELECT set_config('app.bypass_rls', 'on', true)`);
+      const { rows } = await cliente.query<{ id: string }>(consulta, [valor]);
+      await cliente.query('COMMIT');
+      tenantId = rows[0]?.id ?? null;
+      if (tenantId) {
+        await cliente.query('SELECT set_config($1, $2, false)', ['app.tenant_id', tenantId]);
+      }
+    } catch (err) {
+      seCorto();
+      await cliente.query('ROLLBACK').catch(() => undefined);
+      devolverAlPool(cliente, 'app.tenant_id', req.originalUrl);
+      next(err);
+      return;
+    }
+
+    if (seCorto()) {
+      devolverAlPool(cliente, 'app.tenant_id', req.originalUrl);
+      return;
+    }
+    if (!tenantId) {
+      devolverAlPool(cliente, 'app.tenant_id', req.originalUrl);
+      res.status(404).json({ error: noEncontrado });
+      return;
+    }
+
+    req.tenantId = tenantId;
+
+    let liberada = false;
+    const liberar = (): void => {
+      if (liberada) return;
+      liberada = true;
+      devolverAlPool(cliente, 'app.tenant_id', req.originalUrl);
+    };
+    res.on('finish', liberar);
+    res.on('close', liberar);
+
+    correrEnContexto({ cliente, tenantId, bypass: false }, async () => {
+      next();
+    }).catch((err: unknown) => {
+      liberar();
+      next(err);
+    });
   };
-  res.on('finish', liberar);
-  res.on('close', liberar);
-
-  correrEnContexto({ cliente, tenantId, bypass: false }, async () => {
-    next();
-  }).catch((err: unknown) => {
-    liberar();
-    next(err);
-  });
 }
 
 /**

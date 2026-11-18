@@ -36,6 +36,7 @@ Nomenclatura: `RF-<módulo>-<n>`.
 | RF-TUR-10 | La página no recibe reservas si la suscripción está vencida o el plan llegó a su tope de turnos del mes; topes de 2 reservas pendientes por teléfono y 40 reservas web por día y lavadero | idem |
 | RF-TUR-11 | Un turno con adicionales tiene dos pasos dentro de «Lavando»: el lavado y, al marcarlo terminado, el adicional (el cliente encera acompañado por el operario asignado). El turno se marca listo al terminar el adicional | `PATCH /api/appointments/:id/adicional` |
 | RF-TUR-12 | Al recibir el vehículo se pueden tomar hasta 12 fotos de su estado desde el detalle del turno; el celular las achica antes de subirlas. Un turno puede tener un **reclamo** abierto con nota: mientras lo esté, sus fotos no se borran. Las demás se borran a los 90 días | `/api/appointments/:id/fotos`, `PATCH /:id/reclamo`, `fotos.test.ts`, `e2e/fotos.spec.ts` |
+| RF-TUR-13 | Con el carro listo o entregado, el panel abre WhatsApp con un mensaje y el enlace a una encuesta (`/calificar/:token`, un enlace por turno): 1 a 5 estrellas y un comentario, una sola vez. Después se ofrece el enlace de reseñas de Google del lavadero **a todos** (Google prohíbe filtrar). Reportes muestra promedio, distribución y comentarios | `resenas.test.ts`, `e2e/resenas.spec.ts` |
 
 ### Clientes y vehículos
 

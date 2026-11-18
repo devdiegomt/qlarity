@@ -1,5 +1,6 @@
 import express, { Router } from 'express';
 import * as fotos from './fotos';
+import { crearEncuesta } from '../resenas/resenas';
 import * as ctrl from './appointments.controller';
 import { authenticate, requireTenant } from '../../shared/middleware/auth';
 import { asyncHandler } from '../../shared/utils/asyncHandler';
@@ -29,6 +30,8 @@ router.post(
   asyncHandler(fotos.subir),
 );
 router.delete('/:id/fotos/:fotoId', validarUuid('id', 'fotoId'), asyncHandler(fotos.borrar));
+// Encuesta de satisfacción: el panel arma el mensaje de WhatsApp con el token.
+router.post('/:id/encuesta', validateId, asyncHandler(crearEncuesta));
 router.patch('/:id/reclamo', validateId, validate(fotos.esquemaReclamo), asyncHandler(fotos.reclamo));
 router.post('/quick',   planLimit('appointments'), validate(schemas.appointmentQuick), asyncHandler(ctrl.quickCreate));
 

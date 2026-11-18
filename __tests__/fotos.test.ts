@@ -90,7 +90,11 @@ it('el operario sube una foto y se ve con un enlace firmado', async () => {
 
 it('un enlace alterado o vencido no sirve', async () => {
   const { url } = (await subir(admin, jpeg())).body as { url: string };
-  expect((await request(app).get(url.replace(/firma=./, 'firma=X'))).status).toBe(404);
+  // Cambiar el primer carácter de la firma por otro que seguro sea distinto
+  // (cambiarlo siempre por «X» fallaba 1 de cada 64 veces: cuando ya era X).
+  const alterada = url.replace(/firma=(.)/, (_, c: string) => `firma=${c === 'A' ? 'B' : 'A'}`);
+  expect(alterada).not.toBe(url);
+  expect((await request(app).get(alterada)).status).toBe(404);
   const vencido = url.replace(/vence=\d+/, `vence=${Math.floor(Date.now() / 1000) - 10}`);
   expect((await request(app).get(vencido)).status).toBe(404);
 });
