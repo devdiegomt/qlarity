@@ -29,6 +29,8 @@ interface Tenant {
   google_review_url: string | null;
   fidelidad_sellos_meta: number;
   fidelidad_dias_regreso: number;
+  fidelidad_tiquetera_suma_sellos: boolean;
+  reservas_por_confirmar: boolean;
 }
 
 interface Service {
@@ -142,6 +144,8 @@ function GeneralTab() {
           google_review_url: tenant.google_review_url ?? '',
           fidelidad_sellos_meta: Number(tenant.fidelidad_sellos_meta) || 0,
           fidelidad_dias_regreso: Number(tenant.fidelidad_dias_regreso) || 0,
+          fidelidad_tiquetera_suma_sellos: Boolean(tenant.fidelidad_tiquetera_suma_sellos),
+          reservas_por_confirmar: Boolean(tenant.reservas_por_confirmar),
         },
       });
       setTenant(updated);
@@ -200,6 +204,23 @@ function GeneralTab() {
         Con 6, el sexto lavado es gratis: cada lavado pagado suma un sello y el premio se aplica al cobrar. Los
         clientes que llevan más días sin venir aparecen en Inicio para invitarlos por WhatsApp. 0 apaga cada uno.
       </p>
+      <Casilla
+        marcada={Boolean(tenant.fidelidad_tiquetera_suma_sellos)}
+        onCambio={(v) => set('fidelidad_tiquetera_suma_sellos', v)}
+        titulo="Los lavados pagados con tiquetera también suman sellos"
+      >
+        Por defecto no: la tiquetera ya tiene descuento, y sumar sellos sería un doble premio.
+      </Casilla>
+
+      <SectionTitle>Reservas web</SectionTitle>
+      <Casilla
+        marcada={Boolean(tenant.reservas_por_confirmar)}
+        onCambio={(v) => set('reservas_por_confirmar', v)}
+        titulo="Confirmar cada reserva antes de darla por hecha"
+      >
+        Las reservas de tu página entran «por confirmar» (siguen guardando su cupo). Las confirmas en Inicio, en Próximas
+        reservas, después de escribirle al cliente. Útil si tus servicios son largos o costosos.
+      </Casilla>
 
       <SectionTitle>Reseñas en Google</SectionTitle>
       <Field
@@ -688,6 +709,17 @@ function Field({ label, value, onChange, type = 'text', placeholder, autoFocus, 
         className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
       />
     </div>
+  );
+}
+
+function Casilla({ marcada, onCambio, titulo, children }: { marcada: boolean; onCambio(v: boolean): void; titulo: string; children: ReactNode }) {
+  return (
+    <label className="flex items-start gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 cursor-pointer">
+      <input type="checkbox" checked={marcada} onChange={(e) => onCambio(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0" />
+      <span className="text-sm text-gray-700 leading-snug">
+        <span className="font-semibold text-gray-900">{titulo}.</span> {children}
+      </span>
+    </label>
   );
 }
 

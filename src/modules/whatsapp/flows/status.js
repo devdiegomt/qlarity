@@ -60,7 +60,7 @@ async function handle(ctx) {
        WHERE UPPER(v.plate) = $1
          AND a.tenant_id = $2
          AND a.scheduled_date = $3
-         AND a.status NOT IN ('cancelled', 'delivered')
+         AND a.status NOT IN ('cancelled', 'delivered', 'no_show')
        ORDER BY a.created_at DESC
        LIMIT 1`,
       [plate, tenant.id, todayDate]

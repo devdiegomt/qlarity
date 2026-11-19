@@ -51,7 +51,7 @@ async function getAvailableSlots(tenantId, date, estimatedMinutes) {
      JOIN services s ON s.id = a.service_id
      WHERE a.tenant_id = $1
        AND a.scheduled_date = $2
-       AND a.status NOT IN ('cancelled', 'delivered')
+       AND a.status NOT IN ('cancelled', 'delivered', 'no_show')
        AND a.scheduled_time IS NOT NULL`,
     [tenantId, date]
   );

@@ -15,7 +15,7 @@ export type UserRole        = 'admin' | 'operator' | 'super_admin';
 /** `free`, `basic` y `pro` ya no se ofrecen, pero hay lavaderos que los tienen. */
 export type PlanId          = 'estudio' | 'estudio_pro' | 'free' | 'basic' | 'pro';
 export type SubscriptionStatus = 'trial' | 'active' | 'suspended';
-export type AppointmentStatus = 'pending' | 'in_progress' | 'done' | 'delivered' | 'cancelled';
+export type AppointmentStatus = 'pending' | 'in_progress' | 'done' | 'delivered' | 'cancelled' | 'no_show';
 export type AppointmentSource = 'walk_in' | 'whatsapp' | 'phone' | 'web';
 export type VehicleType     = 'sedan' | 'suv' | 'camioneta' | 'moto' | 'pickup';
 export type PaymentMethod   = 'cash' | 'transfer' | 'nequi' | 'daviplata' | 'card' | 'other';
@@ -28,11 +28,13 @@ export type Currency        = 'COP' | 'USD';
 // ─── FSM de turnos ────────────────────────────────────────────────────────────
 
 export const VALID_TRANSITIONS: Record<AppointmentStatus, readonly AppointmentStatus[]> = {
-  pending:     ['in_progress', 'cancelled'],
+  pending:     ['in_progress', 'cancelled', 'no_show'],
   in_progress: ['done',        'cancelled'],
   done:        ['delivered',   'cancelled'],
   delivered:   [],
   cancelled:   [],
+  // «No vino» se puede deshacer: el cliente llegó tarde después de todo.
+  no_show:     ['pending'],
 } as const;
 
 // ─── Database rows (PostgreSQL → snake_case) ──────────────────────────────────
@@ -44,6 +46,8 @@ export interface TenantRow {
   google_review_url: string | null;
   fidelidad_sellos_meta: number;
   fidelidad_dias_regreso: number;
+  fidelidad_tiquetera_suma_sellos: boolean;
+  reservas_por_confirmar: boolean;
   nit: string | null;
   owner_name: string | null;
   phone: string | null;

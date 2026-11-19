@@ -33,7 +33,7 @@ export async function list(req: Request, res: Response): Promise<void> {
   type CustomerListRow = CustomerRow & { vehicle_count: string };
   const { rows } = await db.query<CustomerListRow>(
     `SELECT c.id, c.first_name, c.last_name, c.phone, c.email,
-            c.document_type, c.document_number, c.notes,
+            c.document_type, c.document_number, c.notes, c.bloqueado_web,
             c.created_at,
             (SELECT COUNT(*) FROM vehicles v WHERE v.customer_id = c.id AND v.deleted_at IS NULL) AS vehicle_count
      FROM customers c
@@ -103,6 +103,7 @@ export async function update(req: Request, res: Response): Promise<void> {
   const fieldMap: Record<string, keyof CustomerRow> = {
     firstName: 'first_name', lastName: 'last_name', phone: 'phone',
     email: 'email', documentType: 'document_type', documentNumber: 'document_number', notes: 'notes',
+    bloqueadoWeb: 'bloqueado_web' as keyof CustomerRow,
   };
 
   const body = req.body as Record<string, unknown>;

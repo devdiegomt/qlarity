@@ -53,6 +53,12 @@ export const ESTADOS: Record<AppointmentStatus, Estado> = {
     punto: 'bg-red-600',
     borde: 'border-l-red-600',
   },
+  no_show: {
+    label: 'No vino',
+    pastilla: 'bg-orange-100 text-orange-800',
+    punto: 'bg-orange-600',
+    borde: 'border-l-orange-600',
+  },
 };
 
 export function PuntoEstado({ status }: { status: AppointmentStatus }) {

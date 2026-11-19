@@ -37,6 +37,13 @@ Nomenclatura: `RF-<módulo>-<n>`.
 | RF-TUR-11 | Un turno con adicionales tiene dos pasos dentro de «Lavando»: el lavado y, al marcarlo terminado, el adicional (el cliente encera acompañado por el operario asignado). El turno se marca listo al terminar el adicional | `PATCH /api/appointments/:id/adicional` |
 | RF-TUR-12 | Al recibir el vehículo se pueden tomar hasta 12 fotos de su estado desde el detalle del turno; el celular las achica antes de subirlas. Un turno puede tener un **reclamo** abierto con nota: mientras lo esté, sus fotos no se borran. Las demás se borran a los 90 días | `/api/appointments/:id/fotos`, `PATCH /:id/reclamo`, `fotos.test.ts`, `e2e/fotos.spec.ts` |
 | RF-TUR-13 | Con el carro listo o entregado, el panel abre WhatsApp con un mensaje y el enlace a una encuesta (`/calificar/:token`, un enlace por turno): 1 a 5 estrellas y un comentario, una sola vez. Después se ofrece el enlace de reseñas de Google del lavadero **a todos** (Google prohíbe filtrar). Reportes muestra promedio, distribución y comentarios | `resenas.test.ts`, `e2e/resenas.spec.ts` |
+| RF-TUR-14 | Un turno de otro día no se puede iniciar ni marcar «No vino»; «Atender hoy» lo pasa a hoy si el cliente llegó antes | `turno-futuro.test.ts` |
+| RF-TUR-15 | **«No vino»** (`no_show`): pasados 30 min de la hora sin que llegue, el panel ofrece marcarlo; libera la bahía y cuenta como falta. Se puede deshacer («Sí vino») | `reservas-confianza.test.ts` |
+| RF-TUR-16 | Con 2 «No vino» en 90 días, o bloqueado a mano por el lavadero, ese número no puede reservar por la web (puede seguir por teléfono o en el lavadero) | idem |
+| RF-TUR-17 | Modo opcional **«Reservas web por confirmar»**: entran pendientes de confirmar (guardan su cupo) y el lavadero las confirma en Próximas reservas | idem |
+| RF-TUR-18 | **Recordar por WhatsApp** desde Próximas reservas (mensaje listo; queda marcado «Recordado») | `e2e/reservas-confianza.spec.ts` |
+| RF-TUR-19 | Un carro sin hora (llegó sin reservar) ocupa una bahía desde que se registró o empezó a lavarse: la web no vende ese cupo | `reservas-confianza.test.ts` |
+| RF-TUR-20 | Captcha opcional (Cloudflare Turnstile) en la página de reservas, activo si están `TURNSTILE_SITE_KEY` y `TURNSTILE_SECRET` | `reservas-captcha.test.ts` |
 
 ### Fidelización
 
@@ -45,6 +52,7 @@ Nomenclatura: `RF-<módulo>-<n>`.
 | RF-FID-1 | **Tarjeta de sellos:** cada lavado pagado suma un sello; el lavado número N (Configuración, 6 por defecto; 0 la apaga) es gratis. El premio se aplica al cobrar: el backend comprueba que lo tenga y calcula el monto (los adicionales se cobran). Los sellos no se guardan: se cuentan desde los pagos, después del último premio | `fidelizacion.ts`, `payments.origen/descuento`, `fidelizacion.test.ts`, `e2e/fidelizacion.spec.ts` |
 | RF-FID-2 | **Clientes que no han vuelto:** en Inicio, los que llevan más de N días (30 por defecto; 0 lo apaga) desde su última entrega, sin turno pendiente, con un botón que abre WhatsApp con una invitación, sus sellos y el enlace de reservas. Al invitar, deja de aparecer 14 días | `GET /api/customers/sin-volver`, `POST /:id/invitado` |
 | RF-FID-3 | **Tiquetera:** paquetes de N lavados de un servicio por un precio, con vencimiento opcional (Configuración → Servicios). Se venden desde Clientes; la plata entra a los ingresos **el día de la venta** (Inicio y Reportes: total, por día y por método). Al cobrar un turno del mismo servicio, se usa un lavado: el lavado sale en $0 y los adicionales se cobran; lo pagado con tiquetera no suma sellos. El saldo se descuenta en el mismo `UPDATE` que comprueba que quede (dos cobros a la vez no gastan el mismo lavado), en la misma transacción que el pago | `tiquetera.ts`, `tiquetera.test.ts`, `e2e/tiquetera.spec.ts` |
+| RF-FID-3b | Opción del lavadero: lo pagado con tiquetera también suma sellos (por defecto no) | `reservas-confianza.test.ts` |
 | RF-FID-4 | Plan mensual (suscripción con cobro automático) | Pendiente: requiere integrar un medio de pago |
 
 ### Clientes y vehículos

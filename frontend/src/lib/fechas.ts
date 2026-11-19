@@ -62,3 +62,20 @@ export function inicioDeEspera(t: TurnoConTiempos, ahora: Date = new Date()): Da
 export function fechaCorta(fecha: string): string {
   return new Date(`${fecha.slice(0, 10)}T12:00:00`).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' });
 }
+
+/** Margen después de la hora agendada para preguntar «¿No vino?». */
+export const MINUTOS_PARA_NO_VINO = 30;
+
+/**
+ * Un turno pendiente de hoy cuya hora ya pasó hace más de 30 minutos: el panel
+ * pregunta si no vino, para liberar la bahía.
+ */
+export function noHaLlegado(
+  t: { status: string; scheduled_date?: string | null; scheduled_time?: string | null },
+  ahora: Date = new Date(),
+): boolean {
+  if (t.status !== 'pending' || !t.scheduled_date || !t.scheduled_time) return false;
+  if (soloFecha(t.scheduled_date) !== fechaLocal(ahora)) return false;
+  const agendado = new Date(`${soloFecha(t.scheduled_date)}T${t.scheduled_time.slice(0, 5)}:00`);
+  return ahora.getTime() - agendado.getTime() > MINUTOS_PARA_NO_VINO * 60_000;
+}

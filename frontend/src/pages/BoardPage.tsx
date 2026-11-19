@@ -1,6 +1,6 @@
 import Vacio from "../components/Vacio";
 import PistaPrimeraVez from "../components/PistaPrimeraVez";
-import { inicioDeEspera } from "../lib/fechas";
+import { inicioDeEspera, noHaLlegado } from "../lib/fechas";
 import EtiquetaWeb from "../components/EtiquetaWeb";
 import FotosRecepcion from "../components/FotosRecepcion";
 import BotonEncuesta from "../components/BotonEncuesta";
@@ -53,6 +53,7 @@ interface BoardAppointment {
   minutos_adicionales?: number;
   /** Cuándo terminó el lavado y empezó el adicional. */
   adicional_iniciado_at?: string | null;
+  por_confirmar?: boolean;
   reclamo_abierto_at?: string | null;
   reclamo_nota?: string | null;
 }
@@ -193,6 +194,7 @@ export default function BoardPage() {
         in_progress: "Lavado iniciado",
         done: "Marcado como listo",
         cancelled: "Turno cancelado",
+        no_show: "Marcado: no vino. La bahía queda libre",
       };
       toast.success(labels[newStatus] ?? "Estado actualizado");
       fetchData(); // Re-fetch to get accurate timestamps
@@ -454,9 +456,14 @@ function KanbanCard({
     >
       {/* Top row: plate + elapsed */}
       <div className="flex items-center justify-between mb-1">
-        <span className="flex items-center gap-1.5">
+        <span className="flex items-center gap-1.5 flex-wrap">
           <Placa placa={a.plate} />
           <EtiquetaWeb source={a.source} />
+          {a.por_confirmar && (
+            <span className="text-[0.68rem] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded border border-orange-600/50 text-orange-800 bg-orange-50">
+              Por confirmar
+            </span>
+          )}
         </span>
         {elapsed && (a.status === "pending" || a.status === "in_progress") && (
           <span
@@ -544,6 +551,19 @@ function KanbanCard({
           className="mt-3 w-full text-xs font-semibold py-2 rounded-lg border border-brand-400 text-brand-800 hover:bg-brand-600 hover:text-white hover:border-brand-600 transition"
         >
           {accion.label}
+        </button>
+      )}
+      {/* Pasó media hora de la hora agendada y el carro no llegó. */}
+      {noHaLlegado(a) && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onStatusChange(a.id, "no_show");
+          }}
+          className="mt-2 w-full text-xs font-semibold py-2 rounded-lg border border-orange-600/50 text-orange-800 hover:bg-orange-50 transition"
+          title="Pasaron más de 30 minutos de la hora: libera la bahía y cuenta como falta del cliente"
+        >
+          ¿No vino? Liberar la bahía
         </button>
       )}
     </div>

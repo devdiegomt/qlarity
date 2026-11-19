@@ -88,6 +88,32 @@ export async function today(req: Request, res: Response): Promise<void> {
   res.json(rows);
 }
 
+// ─── POST /api/appointments/:id/confirmar · /recordado ────────────────────────
+
+/**
+ * Confirmar una reserva web «por confirmar» (modo opcional del lavadero: la
+ * confirma después de hablar con el cliente por WhatsApp).
+ */
+export async function confirmar(req: Request, res: Response): Promise<void> {
+  const { rowCount } = await db.query(
+    `UPDATE appointments SET por_confirmar = false, updated_at = NOW()
+      WHERE id = $1 AND tenant_id = $2 AND status = 'pending'`,
+    [req.params.id, req.tenantId],
+  );
+  if (!rowCount) throw new AppError('Turno no encontrado o ya no está pendiente', 404);
+  res.status(204).end();
+}
+
+/** Anota que se le recordó el turno al cliente (el panel abre WhatsApp). */
+export async function recordado(req: Request, res: Response): Promise<void> {
+  const { rowCount } = await db.query(
+    `UPDATE appointments SET recordado_at = NOW(), updated_at = NOW() WHERE id = $1 AND tenant_id = $2`,
+    [req.params.id, req.tenantId],
+  );
+  if (!rowCount) throw new AppError('Turno no encontrado', 404);
+  res.status(204).end();
+}
+
 // ─── PATCH /api/appointments/:id/adicional ────────────────────────────────────
 
 /**
@@ -289,12 +315,15 @@ export async function changeStatus(req: Request, res: Response): Promise<void> {
     // Un turno de otro día no se puede empezar a lavar: es una reserva, el carro
     // todavía no está. Si el cliente llegó antes, el panel ofrece «Atender hoy»,
     // que lo pasa a hoy; después sí se inicia.
-    if (newStatus === 'in_progress') {
+    // Lo mismo para «No vino»: no se falta a un turno que todavía no llegó.
+    if (newStatus === 'in_progress' || newStatus === 'no_show') {
       const hoy = await getTenantToday(req.tenantId!);
       if (current[0].fecha > hoy) {
         await client.query('ROLLBACK');
         throw new AppError(
-          `Este turno es para el ${current[0].fecha}. Si el cliente llegó antes, usa «Atender hoy» y después inícialo.`,
+          newStatus === 'no_show'
+            ? `Este turno es para el ${current[0].fecha}: todavía no se puede marcar que no vino.`
+            : `Este turno es para el ${current[0].fecha}. Si el cliente llegó antes, usa «Atender hoy» y después inícialo.`,
           409,
           { codigo: 'TURNO_FUTURO' },
         );

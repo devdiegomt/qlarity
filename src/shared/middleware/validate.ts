@@ -232,7 +232,7 @@ export const schemas = {
 
   statusChange: z.object({
     status: z.enum(
-      ['pending', 'in_progress', 'done', 'delivered', 'cancelled'],
+      ['pending', 'in_progress', 'done', 'delivered', 'cancelled', 'no_show'],
       { errorMap: () => ({ message: 'Estado inválido' }) },
     ),
     notes: optStr(500),
@@ -412,6 +412,8 @@ export const schemas = {
       documentType: z.enum(['CC', 'NIT', 'CE', 'PP', 'TI']).optional(),
       documentNumber: optStrParche(20),
       notes: optStrParche(1000),
+      // No dejar que reserve por la página web (reservas falsas, faltas).
+      bloqueadoWeb: z.boolean().optional(),
     })
     .passthrough(),
 
@@ -495,6 +497,9 @@ export const schemas = {
         .refine((n) => n === 0 || (n >= 2 && n <= 50), 'El premio va cada 2 a 50 lavados (0 lo desactiva)')
         .optional(),
       fidelidad_dias_regreso: z.number().int().min(0).max(365, 'Máximo 365 días').optional(),
+      fidelidad_tiquetera_suma_sellos: z.boolean().optional(),
+      // Las reservas web entran «por confirmar» hasta que el lavadero las confirma.
+      reservas_por_confirmar: z.boolean().optional(),
     })
     .passthrough(),
 

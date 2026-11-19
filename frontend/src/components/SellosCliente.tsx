@@ -13,6 +13,8 @@ export interface Sellos {
   sellos: number;
   faltan: number;
   premioDisponible: boolean;
+  /** «No vino» en los últimos 90 días. */
+  faltas?: number;
 }
 
 export default function SellosCliente({ appointmentId }: { appointmentId: string }) {
@@ -20,11 +22,19 @@ export default function SellosCliente({ appointmentId }: { appointmentId: string
   useEffect(() => {
     api<Sellos>(`/appointments/${appointmentId}/fidelidad`).then(setS).catch(() => setS(null));
   }, [appointmentId]);
-  if (!s || s.meta <= 0) return null;
+  if (!s) return null;
+  const aviso = (s.faltas ?? 0) > 0 && (
+    <p className="text-sm text-orange-800" data-testid="faltas">
+      No vino {s.faltas === 1 ? '1 vez' : `${s.faltas} veces`} en los últimos 90 días
+      {(s.faltas ?? 0) >= 2 ? ': no puede reservar por la página web.' : '.'}
+    </p>
+  );
+  if (s.meta <= 0) return aviso || null;
 
   const total = s.meta - 1;
   return (
     <div className="space-y-2" data-testid="sellos">
+      {aviso}
       <div className="flex items-center gap-1.5" aria-label={`${s.sellos} de ${total} sellos`}>
         {Array.from({ length: total }, (_, i) => (
           <span
