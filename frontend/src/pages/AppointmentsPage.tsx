@@ -1,3 +1,5 @@
+import Vacio from "../components/Vacio";
+import PistaPrimeraVez from "../components/PistaPrimeraVez";
 import { ESTADOS, PastillaEstado, Placa, PuntoEstado } from "../lib/estados";
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useSearchParams } from "react-router-dom";
@@ -177,6 +179,11 @@ export default function AppointmentsPage() {
         </div>
       </div>
 
+      <PistaPrimeraVez id="agenda">
+        La <strong>Agenda</strong> muestra los turnos de cualquier día, incluidas las reservas web (con la etiqueta «Web»).
+        Para lo que está pasando ahora mismo en el lavadero, usa el <strong>Tablero</strong>.
+      </PistaPrimeraVez>
+
       {/* Status summary pills */}
       {!loading && appointments.length > 0 && (
         <div className="flex gap-2 flex-wrap">
@@ -210,16 +217,23 @@ export default function AppointmentsPage() {
           ))}
         </div>
       ) : appointments.length === 0 ? (
-        <div className="text-center py-16">
-          <CalendarDays aria-hidden="true" size={36} strokeWidth={1.3} className="mx-auto mb-4 text-gray-400" />
-          <p className="text-gray-500 mb-4">No hay turnos para este día</p>
-          <button
-            onClick={() => setShowModal(true)}
-            className="bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold px-6 py-2.5 rounded-lg transition"
-          >
-            Crear primer turno
-          </button>
-        </div>
+        <Vacio
+          icono={CalendarDays}
+          titulo={isToday ? 'Hoy no hay turnos todavía' : 'No hay turnos para este día'}
+          accion={
+            isToday && (
+              <button
+                onClick={() => setShowModal(true)}
+                className="bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold px-6 py-2.5 rounded-lg transition"
+              >
+                Crear un turno
+              </button>
+            )
+          }
+        >
+          Aquí ves los turnos de un día: los que crea tu equipo y las reservas de tu página web. Cambia de día con las
+          flechas.
+        </Vacio>
       ) : (
         <div className="space-y-3">
           {appointments.map((apt) => (

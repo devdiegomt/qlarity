@@ -1,3 +1,4 @@
+import * as primerosPasos from '../primeros-pasos/primeros-pasos';
 import { Router } from 'express';
 import * as tenantController from './tenant.controller';
 import { authenticate, authorize, requireTenant } from '../../shared/middleware/auth';
@@ -11,6 +12,8 @@ router.get('/me',           asyncHandler(tenantController.getCurrent));
 router.patch('/me',         authorize('admin'), validate(schemas.tenantUpdate), asyncHandler(tenantController.updateCurrent));
 router.get('/me/stats',     validate(schemas.queryListado, 'query'), asyncHandler(tenantController.getDayStats));
 router.get('/me/operators', asyncHandler(tenantController.getOperators));
+router.get('/me/primeros-pasos', asyncHandler(primerosPasos.estado));
+router.post('/me/primeros-pasos', authorize('admin'), validate(primerosPasos.esquemaPaso), asyncHandler(primerosPasos.marcar));
 router.get('/me/usage',     asyncHandler(tenantController.getUsage)); // bugfix: faltaba en el original
 
 export default router;

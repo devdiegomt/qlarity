@@ -1,3 +1,4 @@
+import PistaPrimeraVez from "../components/PistaPrimeraVez";
 import CalificacionesResumen from "../components/CalificacionesResumen";
 import { CircleCheck, ReceiptText, Users, Wallet, type LucideIcon } from 'lucide-react';
 import { useState, useEffect, useCallback } from "react";
@@ -160,6 +161,11 @@ export default function ReportsPage() {
           ))}
         </div>
       </div>
+
+      <PistaPrimeraVez id="reportes">
+        Cuánto entró, qué servicios se venden más y quiénes son tus mejores clientes, por día, semana o mes. Abajo, lo
+        que dicen tus clientes en las encuestas.
+      </PistaPrimeraVez>
 
       {loading ? (
         <SkeletonCard count={4} height="h-24" />

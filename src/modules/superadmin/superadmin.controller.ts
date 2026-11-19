@@ -39,7 +39,7 @@ export async function listTenants(req: Request, res: Response): Promise<void> {
   const { rows } = await db.query<TenantListRow>(
     `SELECT t.*,
             (SELECT COUNT(*) FROM users u WHERE u.tenant_id = t.id AND u.is_active = true) AS user_count,
-            (SELECT COUNT(*) FROM appointments a WHERE a.tenant_id = t.id AND a.scheduled_date = CURRENT_DATE) AS today_appointments,
+            (SELECT COUNT(*) FROM appointments a WHERE a.tenant_id = t.id AND a.scheduled_date = (NOW() AT TIME ZONE t.timezone)::date) AS today_appointments,
             (SELECT COALESCE(SUM(p.amount), 0) FROM payments p WHERE p.tenant_id = t.id AND p.created_at >= DATE_TRUNC('month', NOW())) AS month_revenue
      FROM tenants t ${where}
      ORDER BY t.created_at DESC
@@ -178,7 +178,8 @@ export async function dashboard(req: Request, res: Response): Promise<void> {
       (SELECT COUNT(*) FROM tenants WHERE is_active = false) AS inactive_tenants,
       (SELECT COUNT(*) FROM tenants WHERE trial_ends_at > NOW()) AS in_trial,
       (SELECT COUNT(*) FROM users WHERE is_active = true) AS total_users,
-      (SELECT COUNT(*) FROM appointments WHERE scheduled_date = CURRENT_DATE) AS today_appointments,
+      (SELECT COUNT(*) FROM appointments a JOIN tenants tz ON tz.id = a.tenant_id
+        WHERE a.scheduled_date = (NOW() AT TIME ZONE tz.timezone)::date) AS today_appointments,
       (SELECT COUNT(*) FROM appointments WHERE scheduled_date >= DATE_TRUNC('month', NOW())) AS month_appointments,
       (SELECT COALESCE(SUM(amount), 0) FROM payments WHERE created_at >= DATE_TRUNC('month', NOW())) AS month_revenue,
       (SELECT COUNT(*) FROM tenants WHERE created_at >= NOW() - INTERVAL '7 days') AS new_tenants_week,
