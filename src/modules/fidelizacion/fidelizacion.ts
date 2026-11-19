@@ -12,6 +12,7 @@
  * contador que se desincronice si se borra o se corrige un pago. Ver
  * shared/db/migrate-fidelizacion.ts.
  */
+import { getTenantToday } from '../../shared/utils/dateUtils';
 import type { Request, Response } from 'express';
 import * as db from '../../shared/db';
 import { AppError } from '../../shared/middleware/errorHandler';
@@ -99,15 +100,19 @@ export async function sinVolver(req: Request, res: Response): Promise<void> {
        FROM ultima u JOIN customers c ON c.id = u.customer_id
       WHERE c.tenant_id = $1
         AND c.anonymized_at IS NULL AND c.deleted_at IS NULL AND c.phone IS NOT NULL
-        AND u.ultima < CURRENT_DATE - $2::int
+        AND u.ultima < $4::date - $2::int
         AND (c.invitado_regreso_at IS NULL OR c.invitado_regreso_at < NOW() - make_interval(days => $3))
         AND NOT EXISTS (
-          SELECT 1 FROM appointments f WHERE f.customer_id = c.id AND f.status = 'pending' AND f.scheduled_date >= CURRENT_DATE
+          SELECT 1 FROM appointments f WHERE f.customer_id = c.id AND f.status = 'pending' AND f.scheduled_date >= $4::date
         )
       ORDER BY u.ultima DESC
       LIMIT 50`,
-    [req.tenantId, dias, DIAS_ENTRE_INVITACIONES],
+    // «Hoy» del lavadero, no de la base: la base corre en UTC, y de 7 p. m. a
+    // medianoche en Colombia CURRENT_DATE ya es mañana (un cliente con turno
+    // para hoy salía como «no ha vuelto»).
+    [req.tenantId, dias, DIAS_ENTRE_INVITACIONES, await getTenantToday(req.tenantId!)],
   );
+  const hoy = await getTenantToday(req.tenantId!);
   res.json({
     dias,
     clientes: rows.map((r) => ({
@@ -115,7 +120,7 @@ export async function sinVolver(req: Request, res: Response): Promise<void> {
       nombre: r.first_name,
       telefono: r.phone,
       ultimaVisita: r.ultima,
-      diasSinVenir: Math.floor((Date.now() - new Date(r.ultima).getTime()) / 86_400_000),
+      diasSinVenir: Math.round((new Date(`${hoy}T12:00:00Z`).getTime() - new Date(`${String(r.ultima instanceof Date ? r.ultima.toISOString() : r.ultima).slice(0, 10)}T12:00:00Z`).getTime()) / 86_400_000),
       visitas: parseInt(r.visitas, 10),
       placa: r.placa,
       servicio: r.servicio,

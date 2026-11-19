@@ -1,3 +1,4 @@
+import { marcarPaso } from '../primeros-pasos/primeros-pasos';
 import type { Request, Response } from 'express';
 import * as db from '../../shared/db';
 import { AppError } from '../../shared/middleware/errorHandler';
@@ -50,6 +51,7 @@ export async function create(req: Request, res: Response): Promise<void> {
      estimatedMinutes ?? 60, sortOrder ?? 0, esAdicional ?? false],
   );
 
+  await marcarPaso(req.tenantId!, 'servicios');
   res.status(201).json(rows[0]);
 }
 
@@ -79,6 +81,7 @@ export async function update(req: Request, res: Response): Promise<void> {
   );
 
   if (rows.length === 0) throw new AppError('Servicio no encontrado', 404);
+  await marcarPaso(req.tenantId!, 'servicios');
   res.json(rows[0]);
 }
 

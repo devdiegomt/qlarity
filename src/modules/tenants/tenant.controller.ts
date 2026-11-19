@@ -1,3 +1,4 @@
+import { marcarPaso } from '../primeros-pasos/primeros-pasos';
 import { ventasTiquetera } from '../fidelizacion/tiquetera';
 import type { Request, Response } from 'express';
 import * as db from '../../shared/db';
@@ -62,6 +63,11 @@ export async function updateCurrent(req: Request, res: Response): Promise<void> 
     `UPDATE tenants SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
     values as (string | number | boolean | null)[],
   );
+
+  // Guía de primeros pasos: guardar el horario o las bahías cuenta como revisado.
+  if (body.opening_time !== undefined || body.closing_time !== undefined || body.bays_count !== undefined) {
+    await marcarPaso(req.tenantId!, 'horario');
+  }
 
   res.json(rows[0]);
 }

@@ -263,8 +263,9 @@ export async function changeStatus(req: Request, res: Response): Promise<void> {
   try {
     await client.query('BEGIN');
 
-    const { rows: current } = await client.query<Pick<AppointmentRow, 'id' | 'status' | 'customer_id'>>(
-      'SELECT id, status, customer_id FROM appointments WHERE id = $1 AND tenant_id = $2 FOR UPDATE',
+    const { rows: current } = await client.query<Pick<AppointmentRow, 'id' | 'status' | 'customer_id'> & { fecha: string }>(
+      `SELECT id, status, customer_id, to_char(scheduled_date, 'YYYY-MM-DD') AS fecha
+         FROM appointments WHERE id = $1 AND tenant_id = $2 FOR UPDATE`,
       [req.params.id, req.tenantId],
     );
 
@@ -283,6 +284,21 @@ export async function changeStatus(req: Request, res: Response): Promise<void> {
         `Transiciones válidas: ${validNext.length ? validNext.join(', ') : 'ninguna (estado final)'}`,
         400,
       );
+    }
+
+    // Un turno de otro día no se puede empezar a lavar: es una reserva, el carro
+    // todavía no está. Si el cliente llegó antes, el panel ofrece «Atender hoy»,
+    // que lo pasa a hoy; después sí se inicia.
+    if (newStatus === 'in_progress') {
+      const hoy = await getTenantToday(req.tenantId!);
+      if (current[0].fecha > hoy) {
+        await client.query('ROLLBACK');
+        throw new AppError(
+          `Este turno es para el ${current[0].fecha}. Si el cliente llegó antes, usa «Atender hoy» y después inícialo.`,
+          409,
+          { codigo: 'TURNO_FUTURO' },
+        );
+      }
     }
 
     const tsField = TIMESTAMP_MAP[newStatus];

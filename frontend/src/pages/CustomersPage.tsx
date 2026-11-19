@@ -1,3 +1,5 @@
+import Vacio from '../components/Vacio';
+import PistaPrimeraVez from '../components/PistaPrimeraVez';
 import TiqueteraCliente from '../components/TiqueteraCliente';
 import { useState, useEffect, useCallback, type HTMLInputTypeAttribute } from 'react';
 import { Users, X } from 'lucide-react';
@@ -140,6 +142,11 @@ export default function CustomersPage() {
         </button>
       </div>
 
+      <PistaPrimeraVez id="clientes">
+        Cada cliente se guarda con su autorización de datos. Desde aquí lo editas, le vendes una <strong>tiquetera</strong>
+        (lavados prepagados) o lo encuentras por placa, teléfono o nombre.
+      </PistaPrimeraVez>
+
       {/* Search */}
       <input
         type="text"
@@ -155,12 +162,14 @@ export default function CustomersPage() {
           {[1, 2, 3].map((i) => <div key={i} className="bg-white rounded-xl p-4 h-20 animate-pulse" />)}
         </div>
       ) : customers.length === 0 ? (
-        <div className="text-center py-16">
-          <Users aria-hidden="true" size={36} strokeWidth={1.3} className="mx-auto mb-4 text-gray-400" />
-          <p className="text-gray-500">
-            {search ? 'No se encontraron resultados' : 'Aún no hay clientes registrados'}
-          </p>
-        </div>
+        search ? (
+          <Vacio icono={Users} titulo="No se encontraron resultados">Prueba con la placa, el teléfono o parte del nombre.</Vacio>
+        ) : (
+          <Vacio icono={Users} titulo="Aún no hay clientes">
+            Se crean solos cuando registras un turno o alguien reserva en tu página. También puedes agregarlos con
+            «Nuevo cliente». Aquí verás sus visitas y podrás venderles una tiquetera.
+          </Vacio>
+        )
       ) : (
         <div className="space-y-2">
           {customers.map((c) => (

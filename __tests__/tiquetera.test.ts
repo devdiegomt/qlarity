@@ -102,7 +102,11 @@ it('no sirve para otro servicio, vencida, ni sin saldo', async () => {
   expect((await pagarCon((await turnoListo()).id, tiq.id)).status).toBe(409); // agotada
 
   const otra = (await vender((await paquete()).body.id)).body;
-  await db.queryAdmin(`UPDATE tiqueteras SET vence_el = CURRENT_DATE - 1 WHERE id = $1`, [otra.id]);
+  // «Ayer» del lavadero (Bogotá), no de la base: de noche, en UTC ya es mañana.
+  await db.queryAdmin(
+    `UPDATE tiqueteras t SET vence_el = (NOW() AT TIME ZONE tn.timezone)::date - 1 FROM tenants tn WHERE tn.id = t.tenant_id AND t.id = $1`,
+    [otra.id],
+  );
   expect((await pagarCon((await turnoListo()).id, otra.id)).status).toBe(409); // vencida
 });
 

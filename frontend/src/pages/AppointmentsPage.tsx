@@ -1,7 +1,9 @@
+import Vacio from "../components/Vacio";
+import PistaPrimeraVez from "../components/PistaPrimeraVez";
 import { ESTADOS, PastillaEstado, Placa, PuntoEstado } from "../lib/estados";
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useSearchParams } from "react-router-dom";
-import { etiquetaDia, fechaLocal, inicioDeEspera, sumarDias } from "../lib/fechas";
+import { etiquetaDia, fechaLocal, inicioDeEspera, soloFecha, sumarDias } from "../lib/fechas";
 import EtiquetaWeb from "../components/EtiquetaWeb";
 import BotonEncuesta from "../components/BotonEncuesta";
 import { useState, useEffect, useCallback } from "react";
@@ -70,6 +72,19 @@ export default function AppointmentsPage() {
   useEffect(() => {
     fetchAppointments();
   }, [fetchAppointments]);
+
+  // El cliente de una reserva para otro día llegó antes: se pasa a hoy, y desde
+  // ahí se inicia como cualquier turno (un turno futuro no se puede iniciar).
+  const handleAtenderHoy = async (id: string) => {
+    try {
+      await api(`/appointments/${id}`, { method: "PATCH", body: { scheduledDate: fechaLocal() } });
+      toast.success("Pasado a hoy: ya puedes iniciarlo");
+      setSelectedDate(fechaLocal());
+      fetchAppointments();
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  };
 
   // Terminó el lavado y empieza el adicional («encera tú mismo»).
   const handleAdicional = async (id: string) => {
@@ -164,6 +179,11 @@ export default function AppointmentsPage() {
         </div>
       </div>
 
+      <PistaPrimeraVez id="agenda">
+        La <strong>Agenda</strong> muestra los turnos de cualquier día, incluidas las reservas web (con la etiqueta «Web»).
+        Para lo que está pasando ahora mismo en el lavadero, usa el <strong>Tablero</strong>.
+      </PistaPrimeraVez>
+
       {/* Status summary pills */}
       {!loading && appointments.length > 0 && (
         <div className="flex gap-2 flex-wrap">
@@ -197,16 +217,23 @@ export default function AppointmentsPage() {
           ))}
         </div>
       ) : appointments.length === 0 ? (
-        <div className="text-center py-16">
-          <CalendarDays aria-hidden="true" size={36} strokeWidth={1.3} className="mx-auto mb-4 text-gray-400" />
-          <p className="text-gray-500 mb-4">No hay turnos para este día</p>
-          <button
-            onClick={() => setShowModal(true)}
-            className="bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold px-6 py-2.5 rounded-lg transition"
-          >
-            Crear primer turno
-          </button>
-        </div>
+        <Vacio
+          icono={CalendarDays}
+          titulo={isToday ? 'Hoy no hay turnos todavía' : 'No hay turnos para este día'}
+          accion={
+            isToday && (
+              <button
+                onClick={() => setShowModal(true)}
+                className="bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold px-6 py-2.5 rounded-lg transition"
+              >
+                Crear un turno
+              </button>
+            )
+          }
+        >
+          Aquí ves los turnos de un día: los que crea tu equipo y las reservas de tu página web. Cambia de día con las
+          flechas.
+        </Vacio>
       ) : (
         <div className="space-y-3">
           {appointments.map((apt) => (
@@ -215,6 +242,7 @@ export default function AppointmentsPage() {
               appointment={apt}
               onStatusChange={handleStatusChange}
               onAdicional={handleAdicional}
+              onAtenderHoy={handleAtenderHoy}
             />
           ))}
         </div>
@@ -237,6 +265,7 @@ interface AppointmentCardProps {
   appointment: Appointment;
   onStatusChange(id: string, status: AppointmentStatus): void;
   onAdicional(id: string): void;
+  onAtenderHoy(id: string): void;
 }
 
 const NEXT_STATUS: Partial<Record<AppointmentStatus, AppointmentStatus>> = {
@@ -255,7 +284,10 @@ function AppointmentCard({
   appointment: a,
   onStatusChange,
   onAdicional,
+  onAtenderHoy,
 }: AppointmentCardProps) {
+  // Una reserva de otro día no se inicia: el carro todavía no está.
+  const esFuturo = soloFecha(a.scheduled_date) > fechaLocal();
   // Con adicionales, el lavado termina antes de marcar listo: ver BoardPage.
   const pendienteAdicional =
     a.status === "in_progress" && (a.adicionales?.length ?? 0) > 0 && !a.adicional_iniciado_at;
@@ -326,7 +358,15 @@ function AppointmentCard({
 
         {/* Right side: action button */}
         <div className="flex flex-col gap-2 shrink-0">
-          {pendienteAdicional ? (
+          {esFuturo && a.status === "pending" ? (
+            <button
+              onClick={() => onAtenderHoy(a.id)}
+              title="El cliente llegó antes: pasar el turno a hoy para poder iniciarlo"
+              className="text-xs font-semibold px-3 py-2 rounded-lg border border-brand-400 text-brand-800 hover:bg-brand-50 transition whitespace-nowrap"
+            >
+              Atender hoy
+            </button>
+          ) : pendienteAdicional ? (
             <button
               onClick={() => onAdicional(a.id)}
               className="text-xs font-semibold px-3 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white transition whitespace-nowrap"

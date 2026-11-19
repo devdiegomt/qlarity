@@ -1,3 +1,4 @@
+import Vacio from '../components/Vacio';
 import { Placa } from '../lib/estados';
 import { METODOS_PAGO as METHODS } from '../lib/metodos-pago';
 import { ReceiptText, Wallet, type LucideIcon } from 'lucide-react';
@@ -158,10 +159,10 @@ export default function PaymentsPage() {
           {[1, 2, 3].map((i) => <div key={i} className="bg-white rounded-xl p-4 h-20 animate-pulse" />)}
         </div>
       ) : payments.length === 0 ? (
-        <div className="text-center py-16">
-          <Wallet aria-hidden="true" size={36} strokeWidth={1.3} className="mx-auto mb-4 text-gray-400" />
-          <p className="text-gray-500">No hay pagos registrados en este periodo</p>
-        </div>
+        <Vacio icono={Wallet} titulo="No hay pagos en este periodo">
+          Los pagos se registran al entregar un carro desde el Tablero («Entregar»). Cambia el periodo arriba para ver
+          otros días.
+        </Vacio>
       ) : (
         <div className="space-y-2">
           {payments.map((p) => {
