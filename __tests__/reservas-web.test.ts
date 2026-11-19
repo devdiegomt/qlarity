@@ -283,6 +283,32 @@ describe('reservar', () => {
     expect(gigante.status).toBe(413);
   });
 
+  it('una reserva ocupa su bahía sólo lo que dura, no el resto del día', async () => {
+    // Pasó en producción: la duración llegaba como texto desde la base y
+    // «420 + '60'» daba '42060', así que cada turno bloqueaba su bahía hasta el
+    // cierre. Con tantas reservas como bahías, la tarde quedaba sin horarios.
+    const dia = await ultimoDia(completo.id);
+    const temprano = dia.horas[0];
+    const { rows } = await db.queryAdmin<{ bays_count: number }>(`SELECT bays_count FROM tenants WHERE slug = 'el-brillante'`);
+    const tels = Array.from({ length: rows[0].bays_count }, (_, i) => `+5731188803${String(i).padStart(2, '0')}`);
+    TEL.push(...tels);
+    PLACAS.push(...tels.map((_, i) => `WED${String(i).padStart(3, '0')}`));
+    try {
+      for (let i = 0; i < tels.length; i++) {
+        const r = await request(app).post(BASE).send(reserva({ telefono: tels[i], placa: `WED${String(i).padStart(3, '0')}`, fecha: dia.fecha, hora: temprano }));
+        expect(r.status).toBe(201);
+      }
+      const despues = (await diasPara(completo.id)).find((d) => d.fecha === dia.fecha);
+      // La hora llena no se ofrece, pero dos horas después sí.
+      expect(despues?.horas ?? []).not.toContain(temprano);
+      const [h, m] = temprano.split(':').map(Number);
+      const dosHorasDespues = `${String(h + 2).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+      expect(despues?.horas ?? []).toContain(dosHorasDespues);
+    } finally {
+      await limpiar();
+    }
+  });
+
   it('un día fuera de la ventana no se puede reservar', async () => {
     const res = await request(app).post(BASE).send(reserva({ fecha: '2099-01-05', hora: '09:00' }));
     expect(res.status).toBe(400);

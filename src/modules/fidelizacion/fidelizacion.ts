@@ -27,30 +27,49 @@ export interface Sellos {
   /** Cuántos faltan para el premio (0 si ya lo tiene). */
   faltan: number;
   premioDisponible: boolean;
+  /** Turnos en «No vino» en los últimos 90 días. */
+  faltas: number;
+}
+
+/** Faltas que bloquean reservar por la web. */
+export const FALTAS_PARA_BLOQUEO = 2;
+export const DIAS_FALTAS = 90;
+
+export async function faltasDe(tenantId: string, customerId: string, consulta: Consulta = db.query): Promise<number> {
+  const { rows } = await consulta<{ n: string }>(
+    `SELECT COUNT(*) AS n FROM appointments a JOIN tenants t ON t.id = a.tenant_id
+      WHERE a.tenant_id = $1 AND a.customer_id = $2 AND a.status = 'no_show'
+        AND a.scheduled_date >= (NOW() AT TIME ZONE t.timezone)::date - $3::int`,
+    [tenantId, customerId, DIAS_FALTAS],
+  );
+  return parseInt(rows[0].n, 10);
 }
 
 /** Los sellos de un cliente. `consulta` permite usarlo dentro de una transacción. */
 export async function sellosDe(tenantId: string, customerId: string, consulta: Consulta = db.query): Promise<Sellos> {
-  const { rows: t } = await consulta<{ meta: number }>(
-    'SELECT fidelidad_sellos_meta AS meta FROM tenants WHERE id = $1',
+  const { rows: t } = await consulta<{ meta: number; con_tiquetera: boolean }>(
+    'SELECT fidelidad_sellos_meta AS meta, fidelidad_tiquetera_suma_sellos AS con_tiquetera FROM tenants WHERE id = $1',
     [tenantId],
   );
   const meta = t[0]?.meta ?? 0;
-  if (meta <= 0) return { meta: 0, sellos: 0, faltan: 0, premioDisponible: false };
+  const faltas = await faltasDe(tenantId, customerId, consulta);
+  if (meta <= 0) return { meta: 0, sellos: 0, faltan: 0, premioDisponible: false, faltas };
+  // Lo pagado con tiquetera suma sellos sólo si el lavadero lo eligió.
+  const origenes = t[0]?.con_tiquetera ? ['normal', 'tiquetera'] : ['normal'];
 
   const { rows } = await consulta<{ n: string }>(
     `SELECT COUNT(*) AS n
        FROM payments p JOIN appointments a ON a.id = p.appointment_id
-      WHERE a.tenant_id = $1 AND a.customer_id = $2 AND p.origen = 'normal'
+      WHERE a.tenant_id = $1 AND a.customer_id = $2 AND p.origen = ANY($3::text[])
         AND p.created_at > COALESCE((
               SELECT MAX(p2.created_at) FROM payments p2 JOIN appointments a2 ON a2.id = p2.appointment_id
                WHERE a2.tenant_id = $1 AND a2.customer_id = $2 AND p2.origen = 'premio'
             ), '-infinity'::timestamptz)`,
-    [tenantId, customerId],
+    [tenantId, customerId, origenes],
   );
   const pagados = meta - 1;
   const sellos = Math.min(parseInt(rows[0].n, 10), pagados);
-  return { meta, sellos, faltan: pagados - sellos, premioDisponible: sellos >= pagados };
+  return { meta, sellos, faltan: pagados - sellos, premioDisponible: sellos >= pagados, faltas };
 }
 
 export async function fidelidadDeTurno(req: Request, res: Response): Promise<void> {

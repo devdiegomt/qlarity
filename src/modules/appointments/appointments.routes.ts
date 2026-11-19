@@ -36,6 +36,8 @@ router.delete('/:id/fotos/:fotoId', validarUuid('id', 'fotoId'), asyncHandler(fo
 router.post('/:id/encuesta', validateId, asyncHandler(crearEncuesta));
 router.get('/:id/fidelidad', validateId, asyncHandler(fidelidadDeTurno));
 router.get('/:id/tiqueteras', validateId, asyncHandler(tiqueterasDeTurno));
+router.post('/:id/confirmar', validateId, asyncHandler(ctrl.confirmar));
+router.post('/:id/recordado', validateId, asyncHandler(ctrl.recordado));
 router.patch('/:id/reclamo', validateId, validate(fotos.esquemaReclamo), asyncHandler(fotos.reclamo));
 router.post('/quick',   planLimit('appointments'), validate(schemas.appointmentQuick), asyncHandler(ctrl.quickCreate));
 

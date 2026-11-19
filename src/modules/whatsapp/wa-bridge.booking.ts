@@ -102,7 +102,7 @@ async function resumirDatos(
     `SELECT count(*) AS n FROM appointments
      WHERE tenant_id = $1 AND customer_id = $2
        AND scheduled_date >= $3::date
-       AND status NOT IN ('cancelled', 'delivered')`,
+       AND status NOT IN ('cancelled', 'delivered', 'no_show')`,
     // Hoy del lavadero, no de la base (UTC): de noche en Colombia ya es mañana.
     [tenantId, customerId, await getTenantToday(tenantId)],
   );

@@ -410,6 +410,22 @@ producción):
 | Precio, estado, `source` o `tenant_id` inyectados en el cuerpo | Se ignoran: el precio sale del servicio y el tenant del slug |
 | Teléfono `123`, fijo, letras; placa inventada; tipo inexistente; fecha pasada o imposible; hora fuera de la grilla | 400 con un mensaje que dice qué corregir |
 | JSON roto, cuerpo de 2 MB | 400 y 413 (antes **500**, en toda la API) |
+
+**Contra los que no van y los datos falsos (2026-11).** Sin verificar el
+celular, una reserva falsa no se puede impedir del todo; lo que se hizo es que
+cueste y que se note:
+
+- **«No vino»** (`no_show`) libera la bahía y cuenta como falta. Con 2 faltas en
+  90 días ese número no reserva más por la web; el lavadero también puede
+  bloquear un número a mano. La respuesta no dice por qué (no revela el
+  historial de nadie).
+- **Captcha opcional** (Cloudflare Turnstile, gratis) contra los bots. Si
+  Cloudflare no responde, la reserva pasa y se anota: los topes por teléfono y
+  por día siguen.
+- **Modo «por confirmar»** para lavaderos de servicios largos: la reserva guarda
+  su cupo pero queda pendiente hasta que el lavadero habla con el cliente.
+- Un carro que llegó sin reservar **ocupa su bahía** en la disponibilidad web.
+- Pendiente para cuando haya pasarela de pagos: **anticipo** al reservar.
 | `__proto__` en el cuerpo | Sin efecto (Zod descarta las claves que no conoce) |
 
 **La encuesta de satisfacción, desde 2026-11.** `/api/publico/calificaciones/:token`

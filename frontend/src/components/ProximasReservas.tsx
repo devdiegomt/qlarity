@@ -12,6 +12,9 @@ import { etiquetaDia, soloFecha } from '../lib/fechas';
 import { formatTime } from '../lib/format';
 import { Placa } from '../lib/estados';
 import EtiquetaWeb from './EtiquetaWeb';
+import { MessageCircle } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
+import { useToast } from './ui';
 
 interface Proxima {
   id: string;
@@ -21,21 +24,56 @@ interface Proxima {
   service_name: string;
   customer_first_name: string;
   customer_last_name: string | null;
+  customer_phone: string | null;
   source: string;
+  por_confirmar?: boolean;
+  recordado_at?: string | null;
 }
 
 export function useProximas(): Proxima[] | null {
+  return useProximasConRecarga()[0];
+}
+
+function useProximasConRecarga(): [Proxima[] | null, () => void] {
   const [lista, setLista] = useState<Proxima[] | null>(null);
-  useEffect(() => {
+  const cargar = () => {
     api<Proxima[]>('/appointments/proximas').then(setLista).catch(() => setLista([]));
-  }, []);
-  return lista;
+  };
+  useEffect(cargar, []);
+  return [lista, cargar];
+}
+
+/** El recordatorio que el lavadero manda por WhatsApp el día anterior. */
+export function mensajeRecordatorio(t: Proxima, lavadero: string): string {
+  const hola = t.customer_first_name && t.customer_first_name !== 'Cliente' ? `Hola ${t.customer_first_name}` : 'Hola';
+  const cuando = `${etiquetaDia(soloFecha(t.scheduled_date)).toLowerCase()}${t.scheduled_time ? ` a las ${formatTime(t.scheduled_time)}` : ''}`;
+  return `${hola}, te recordamos tu turno en ${lavadero} ${cuando} para ${t.plate} (${t.service_name}). Si no puedes venir, avísanos por aquí para darle el cupo a otra persona. ¡Te esperamos!`;
 }
 
 /** Sección completa, para Inicio. */
 export default function ProximasReservas() {
-  const lista = useProximas();
+  const [lista, recargar] = useProximasConRecarga();
+  const { user } = useAuth();
+  const toast = useToast();
   if (!lista || lista.length === 0) return null;
+
+  const recordar = (t: Proxima) => {
+    if (!t.customer_phone) return;
+    window.open(
+      `https://wa.me/${t.customer_phone.replace(/\D/g, '')}?text=${encodeURIComponent(mensajeRecordatorio(t, user?.tenant?.name ?? 'el lavadero'))}`,
+      '_blank',
+    );
+    void api(`/appointments/${t.id}/recordado`, { method: 'POST' }).then(recargar).catch(() => undefined);
+  };
+  const confirmar = async (t: Proxima) => {
+    try {
+      await api(`/appointments/${t.id}/confirmar`, { method: 'POST' });
+      toast.success('Reserva confirmada');
+      recargar();
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
 
   const porDia = new Map<string, Proxima[]>();
   for (const t of lista) {
@@ -69,10 +107,33 @@ export default function ProximasReservas() {
                     <span className="flex items-center gap-2 flex-wrap">
                       <Placa placa={t.plate} />
                       <EtiquetaWeb source={t.source} />
+                      {t.por_confirmar && (
+                        <span className="text-[0.68rem] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded border border-orange-600/50 text-orange-800 bg-orange-50">
+                          Por confirmar
+                        </span>
+                      )}
                     </span>
                     <span className="block text-xs text-gray-500 mt-1 truncate">
                       {t.service_name} · {t.customer_first_name} {t.customer_last_name ?? ''}
                     </span>
+                  </span>
+                  <span className="flex flex-col items-end gap-1.5 shrink-0">
+                    {t.por_confirmar && (
+                      <button type="button" onClick={() => void confirmar(t)} className="text-xs font-semibold text-green-700 hover:text-green-800">
+                        Confirmar
+                      </button>
+                    )}
+                    {t.customer_phone && (
+                      <button
+                        type="button"
+                        onClick={() => recordar(t)}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:text-brand-800"
+                        title="Abre WhatsApp con un recordatorio listo"
+                      >
+                        <MessageCircle size={13} aria-hidden="true" />
+                        {t.recordado_at ? 'Recordado ✓' : 'Recordar'}
+                      </button>
+                    )}
                   </span>
                 </li>
               ))}

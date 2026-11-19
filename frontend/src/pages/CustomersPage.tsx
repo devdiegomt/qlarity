@@ -20,6 +20,7 @@ interface Customer {
   notes: string | null;
   vehicle_count?: number;
   visit_count?: number;
+  bloqueado_web?: boolean;
 }
 
 interface CustomerFormData {
@@ -52,6 +53,8 @@ export default function CustomersPage() {
   const [editingId, setEditingId]   = useState<string | null>(null);
   const [deleteId, setDeleteId]     = useState<string | null>(null);
   const [formData, setFormData]     = useState<CustomerFormData>(emptyForm);
+  // Sólo al editar: no dejar que reserve por la página web.
+  const [bloqueadoWeb, setBloqueadoWeb] = useState(false);
   const [searchInput, setSearchInput] = useState('');
 
   const fetchCustomers = useCallback(async () => {
@@ -97,13 +100,14 @@ export default function CustomersPage() {
       documentNumber: c.document_number ?? '',
       notes:          c.notes ?? '',
     });
+    setBloqueadoWeb(Boolean(c.bloqueado_web));
     setShowForm(true);
   };
 
   const handleSave = async () => {
     try {
       if (editingId) {
-        await api(`/customers/${editingId}`, { method: 'PATCH', body: formData });
+        await api(`/customers/${editingId}`, { method: 'PATCH', body: { ...formData, bloqueadoWeb } });
       } else {
         await api('/customers', { method: 'POST', body: { ...formData, autorizaDatos: autoriza } });
       }
@@ -177,6 +181,9 @@ export default function CustomersPage() {
               <div className="min-w-0 flex-1">
                 <p className="font-semibold text-sm text-gray-900">
                   {c.first_name} {c.last_name}
+                  {c.bloqueado_web && (
+                    <span className="ml-2 text-xs bg-orange-50 text-orange-800 border border-orange-600/40 px-2 py-0.5 rounded">Sin reservas web</span>
+                  )}
                   {c.vehicle_count !== undefined && c.vehicle_count > 0 && (
                     <span className="ml-2 text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">
                       {c.vehicle_count} vehículo{c.vehicle_count > 1 ? 's' : ''}
@@ -254,6 +261,17 @@ export default function CustomersPage() {
             <FormInput label="Email"        value={formData.email}          onChange={(v) => set('email', v)} type="email" />
             <FormInput label="Cédula / NIT" value={formData.documentNumber} onChange={(v) => set('documentNumber', v)} />
             <FormInput label="Notas"        value={formData.notes}          onChange={(v) => set('notes', v)} placeholder="Preferencias del cliente..." />
+
+            {editingId && (
+              <label className="flex items-start gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 cursor-pointer">
+                <input type="checkbox" checked={bloqueadoWeb} onChange={(e) => setBloqueadoWeb(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0" />
+                <span className="text-sm text-gray-700 leading-snug">
+                  <span className="font-semibold text-gray-900">No dejar que reserve por la página web.</span> Para quien hace
+                  reservas falsas o no llega. Puede seguir agendando por teléfono o en el lavadero. (Con 2 «No vino» en 90
+                  días se bloquea solo.)
+                </span>
+              </label>
+            )}
 
             {!editingId && (
               <CasillaAutorizacion

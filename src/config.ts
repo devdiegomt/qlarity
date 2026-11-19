@@ -138,6 +138,12 @@ const envSchema = z.object({
   FOTOS_BUCKET: z.string().default('fotos-recepcion'),
   FOTOS_DIR: z.string().optional(),
 
+  // ── Captcha de la página de reservas (Cloudflare Turnstile, gratis) ──────
+  // Opcional: sin las dos, la página funciona sin captcha (como antes). Con
+  // ellas, cada reserva web tiene que traer un token válido.
+  TURNSTILE_SITE_KEY: z.string().optional(),
+  TURNSTILE_SECRET: z.string().optional(),
+
   // ── Sesión en cookie ─────────────────────────────────────────────────────
   // El refresh token va en una cookie httpOnly, no en localStorage, para que un
   // XSS no se lleve siete días de sesión renovable. Ver modules/auth/cookies.ts.

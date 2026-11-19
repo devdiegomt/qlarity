@@ -10,7 +10,7 @@
  * abajo: en el celular es más fácil volver a cambiar algo así que con pasos en
  * pantallas separadas. Cada sección aparece cuando la anterior está lista.
  */
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
 import { CalendarCheck, Car, Check, Clock, MapPin, Phone } from 'lucide-react';
 import MarcaQ from '../components/MarcaQ';
@@ -49,6 +49,9 @@ interface Datos {
   servicios: Servicio[];
   /** Se suman a un lavado («encera tú mismo»); no se reservan solos. */
   adicionales?: Servicio[];
+  /** Clave pública de Cloudflare Turnstile, si el lavadero tiene captcha. */
+  captchaSiteKey?: string | null;
+  porConfirmar?: boolean;
 }
 
 interface Dia {
@@ -58,6 +61,7 @@ interface Dia {
 }
 
 interface Confirmada {
+  porConfirmar?: boolean;
   servicio: string;
   adicionales?: string[];
   etiqueta: string;
@@ -105,6 +109,7 @@ export default function ReservarPage() {
   const [placa, setPlaca] = useState('');
   const [notas, setNotas] = useState('');
   const [sitio, setSitio] = useState('');
+  const [captcha, setCaptcha] = useState<string | null>(null);
   const [autoriza, setAutoriza] = useState(false);
 
   const [enviando, setEnviando] = useState(false);
@@ -192,6 +197,7 @@ export default function ReservarPage() {
           placa,
           notas: notas.trim() || null,
           sitio,
+          captcha: captcha ?? undefined,
         },
       });
       setConfirmada(r);
@@ -252,8 +258,14 @@ export default function ReservarPage() {
         <div className="flex items-center justify-center w-12 h-12 rounded-full bg-green-100 text-green-700 mb-5">
           <Check size={26} aria-hidden="true" />
         </div>
-        <h1 className="text-2xl font-semibold text-gray-900">¡Listo, quedó reservado!</h1>
-        <p className="text-gray-600 mt-2">Te esperamos en {lav.nombre}.</p>
+        <h1 className="text-2xl font-semibold text-gray-900">
+          {confirmada.porConfirmar ? '¡Recibimos tu reserva!' : '¡Listo, quedó reservado!'}
+        </h1>
+        <p className="text-gray-600 mt-2">
+          {confirmada.porConfirmar
+            ? `${lav.nombre} te escribirá por WhatsApp para confirmarla. Tu cupo ya está guardado.`
+            : `Te esperamos en ${lav.nombre}.`}
+        </p>
         <dl className="mt-6 bg-white border border-gray-100 rounded-xl divide-y divide-gray-100 text-sm">
           <Fila t="Servicio" v={confirmada.servicio} />
           {confirmada.adicionales && confirmada.adicionales.length > 0 && (
@@ -440,6 +452,8 @@ export default function ReservarPage() {
                 <input id="sitio" tabIndex={-1} autoComplete="off" value={sitio} onChange={(e) => setSitio(e.target.value)} />
               </div>
 
+              {datos.captchaSiteKey && <Captcha clave={datos.captchaSiteKey} onToken={setCaptcha} />}
+
               <CasillaAutorizacion
                 id="autoriza"
                 marcada={autoriza}
@@ -551,4 +565,44 @@ function Fila({ t, v }: { t: string; v: ReactNode }) {
       <dd className="text-gray-900 text-right">{v}</dd>
     </div>
   );
+}
+
+declare global {
+  interface Window {
+    turnstile?: {
+      render(el: HTMLElement, opciones: { sitekey: string; callback(token: string): void; 'expired-callback'(): void; language?: string }): string;
+    };
+  }
+}
+
+/**
+ * Captcha invisible de Cloudflare Turnstile: frena a los bots que llenan
+ * reservas falsas sin pedirle nada a una persona. Sólo aparece si el lavadero
+ * lo tiene configurado (el backend manda la clave pública).
+ */
+function Captcha({ clave, onToken }: { clave: string; onToken(t: string | null): void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const pintar = () => {
+      if (ref.current && window.turnstile && !ref.current.dataset.listo) {
+        ref.current.dataset.listo = '1';
+        window.turnstile.render(ref.current, {
+          sitekey: clave,
+          callback: (t) => onToken(t),
+          'expired-callback': () => onToken(null),
+          language: 'es',
+        });
+      }
+    };
+    if (window.turnstile) {
+      pintar();
+      return;
+    }
+    const s = document.createElement('script');
+    s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+    s.async = true;
+    s.onload = pintar;
+    document.head.appendChild(s);
+  }, [clave, onToken]);
+  return <div ref={ref} className="min-h-[65px]" />;
 }

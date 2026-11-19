@@ -12,7 +12,7 @@
 
 export type UserRole          = 'admin' | 'operator' | 'super_admin';
 export type PlanId            = 'estudio' | 'estudio_pro' | 'free' | 'basic' | 'pro';
-export type AppointmentStatus = 'pending' | 'in_progress' | 'done' | 'delivered' | 'cancelled';
+export type AppointmentStatus = 'pending' | 'in_progress' | 'done' | 'delivered' | 'cancelled' | 'no_show';
 export type AppointmentSource = 'walk_in' | 'whatsapp' | 'phone' | 'web';
 export type VehicleType       = 'sedan' | 'suv' | 'camioneta' | 'moto' | 'pickup';
 export type PaymentMethod     = 'cash' | 'transfer' | 'nequi' | 'daviplata' | 'card' | 'other';

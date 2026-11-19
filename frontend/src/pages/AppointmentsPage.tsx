@@ -3,7 +3,7 @@ import PistaPrimeraVez from "../components/PistaPrimeraVez";
 import { ESTADOS, PastillaEstado, Placa, PuntoEstado } from "../lib/estados";
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useSearchParams } from "react-router-dom";
-import { etiquetaDia, fechaLocal, inicioDeEspera, soloFecha, sumarDias } from "../lib/fechas";
+import { etiquetaDia, fechaLocal, inicioDeEspera, noHaLlegado, soloFecha, sumarDias } from "../lib/fechas";
 import EtiquetaWeb from "../components/EtiquetaWeb";
 import BotonEncuesta from "../components/BotonEncuesta";
 import { useState, useEffect, useCallback } from "react";
@@ -34,6 +34,7 @@ interface Appointment {
   adicionales?: Array<{ id: string; nombre: string; precio: number; minutos: number }>;
   minutos_adicionales?: number;
   adicional_iniciado_at?: string | null;
+  por_confirmar?: boolean;
   bay_number: number | null;
   started_at: string | null;
   created_at: string;
@@ -108,7 +109,9 @@ export default function AppointmentsPage() {
         body: { status: newStatus },
       });
       toast.success(
-        newStatus === "cancelled" ? "Turno cancelado" : "Estado actualizado",
+        newStatus === "cancelled" ? "Turno cancelado"
+          : newStatus === "no_show" ? "Marcado: no vino. La bahía queda libre"
+          : "Estado actualizado",
       );
       fetchAppointments();
     } catch (err) {
@@ -314,6 +317,11 @@ function AppointmentCard({
           <div className="flex items-center gap-2 mb-1 flex-wrap">
             <PastillaEstado status={a.status} />
             <EtiquetaWeb source={a.source} />
+            {a.por_confirmar && a.status === "pending" && (
+              <span className="text-[0.68rem] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded border border-orange-600/50 text-orange-800 bg-orange-50">
+                Por confirmar
+              </span>
+            )}
             {a.scheduled_time && (
               <span className="font-mono text-xs text-gray-500">
                 {formatTime(a.scheduled_time)}
@@ -384,6 +392,20 @@ function AppointmentCard({
             )
           )}
           {a.status === "delivered" && <BotonEncuesta appointmentId={a.id} compacto />}
+          {noHaLlegado(a) && (
+            <button
+              onClick={() => onStatusChange(a.id, "no_show")}
+              title="Pasaron más de 30 minutos de la hora: libera la bahía y cuenta como falta del cliente"
+              className="text-xs font-semibold text-orange-800 hover:text-orange-900"
+            >
+              ¿No vino?
+            </button>
+          )}
+          {a.status === "no_show" && (
+            <button onClick={() => onStatusChange(a.id, "pending")} className="text-xs font-semibold text-brand-700 hover:text-brand-800">
+              Sí vino
+            </button>
+          )}
           {a.status !== "cancelled" && a.status !== "delivered" && (
             <button
               onClick={() => setConfirmCancel(true)}

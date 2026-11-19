@@ -43,6 +43,30 @@ import { autorizacionDe, VERSION_AVISO_LAVADERO } from '../whatsapp/consentimien
 import { registrarAutorizacion } from '../whatsapp/wa-identity';
 import type { ServiceRow, VehicleType } from '../../types/entities';
 import { guardarAdicionales, resolverAdicionales, sumaMinutos, sumaPrecio } from '../appointments/adicionales';
+import { faltasDe, FALTAS_PARA_BLOQUEO } from '../fidelizacion/fidelizacion';
+import { config } from '../../config';
+import logger from '../../shared/utils/logger';
+
+/**
+ * Verifica el token de Cloudflare Turnstile. Si Cloudflare no responde, la
+ * reserva no se bloquea por eso: se anota y se deja pasar, porque los otros
+ * topes (por teléfono y por día) siguen funcionando.
+ */
+async function captchaValido(token: string | undefined, ip: string | undefined): Promise<boolean> {
+  if (!token) return false;
+  try {
+    const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ secret: config.TURNSTILE_SECRET!, response: token, ...(ip ? { remoteip: ip } : {}) }),
+    });
+    const r = (await res.json()) as { success?: boolean };
+    return r.success === true;
+  } catch (err) {
+    logger.error({ err }, 'Turnstile no respondió: se deja pasar la reserva');
+    return true;
+  }
+}
 
 /** Cada cuánto se ofrece una hora de inicio. */
 export const PASO_MIN = 30;
@@ -70,12 +94,13 @@ interface Config {
   closed_weekdays: number[] | null;
   booking_days_ahead: number | null;
   plan: string;
+  reservas_por_confirmar: boolean;
 }
 
 async function leerConfig(tenantId: string): Promise<Config & FilaSuscripcion> {
   const { rows } = await db.query<Config & FilaSuscripcion>(
     `SELECT name, address, city, phone, timezone, opening_time, closing_time, bays_count,
-            closed_weekdays, booking_days_ahead, plan,
+            closed_weekdays, booking_days_ahead, plan, reservas_por_confirmar,
             subscription_status, trial_ends_at, discount_pct, discount_until
        FROM tenants WHERE id = $1`,
     [tenantId],
@@ -144,19 +169,31 @@ export function horasLibres(args: {
 async function ocupadosDelDia(tenantId: string, fecha: string): Promise<TurnoOcupado[]> {
   const { rows } = await db.query<{ scheduled_time: string; estimated_minutes: number | null }>(
     // Lo que ocupa la bahía es el lavado más sus adicionales («encera tú mismo»).
-    `SELECT a.scheduled_time,
-            s.estimated_minutes
-              + COALESCE((SELECT SUM(e.minutes) FROM appointment_extras e WHERE e.appointment_id = a.id), 0)
+    //
+    // Un carro que llegó sin reservar no tiene hora, pero ocupa una bahía igual:
+    // desde que empezó a lavarse, o desde que se registró si sigue esperando.
+    // Antes no contaba, y la página web podía vender ese cupo.
+    `SELECT COALESCE(
+              to_char(a.scheduled_time, 'HH24:MI'),
+              to_char(COALESCE(a.started_at, a.created_at) AT TIME ZONE t.timezone, 'HH24:MI')
+            ) AS scheduled_time,
+            -- ::int: SUM devuelve bigint, que el driver entrega como TEXTO. Sin el
+            -- cast, «420 + '90'» daba '42090' y cada turno ocupaba su bahía hasta
+            -- el final del día (bug de #74, encontrado en noviembre de 2026).
+            (s.estimated_minutes
+              + COALESCE((SELECT SUM(e.minutes) FROM appointment_extras e WHERE e.appointment_id = a.id), 0))::int
               AS estimated_minutes
        FROM appointments a
        JOIN services s ON s.id = a.service_id
+       JOIN tenants t ON t.id = a.tenant_id
       WHERE a.tenant_id = $1
         AND a.scheduled_date = $2
-        AND a.scheduled_time IS NOT NULL
-        AND a.status NOT IN ('cancelled', 'delivered', 'done')`,
+        AND a.status NOT IN ('cancelled', 'delivered', 'done', 'no_show')
+        AND (a.scheduled_time IS NOT NULL OR a.status IN ('pending', 'in_progress'))`,
     [tenantId, fecha],
   );
-  return rows.map((r) => ({ inicio: aMinutos(r.scheduled_time), minutos: r.estimated_minutes || 60 }));
+  // Number(): defensa por si otra vez llega texto desde la base.
+  return rows.map((r) => ({ inicio: aMinutos(r.scheduled_time), minutos: Number(r.estimated_minutes) || 60 }));
 }
 
 function diasDeLaVentana(cfg: Config): { hoy: string; dias: string[] } {
@@ -218,6 +255,9 @@ export async function datosParaReservar(req: Request, res: Response): Promise<vo
       cierre: cfg.closing_time.slice(0, 5),
     },
     recibeReservas: recibeReservas(cfg),
+    // Con esto la página carga el captcha; sin él, no hay captcha.
+    captchaSiteKey: config.TURNSTILE_SECRET ? config.TURNSTILE_SITE_KEY ?? null : null,
+    porConfirmar: cfg.reservas_por_confirmar,
     tipos: TIPOS,
     servicios: servicios
       .filter((s) => !s.es_adicional)
@@ -323,6 +363,8 @@ export const esquemaReserva = z.object({
   notas: z.string().trim().max(300).optional().nullable(),
   // Campo trampa: invisible para una persona, un bot lo llena.
   sitio: z.string().optional(),
+  // Token de Cloudflare Turnstile, si el lavadero lo tiene activo.
+  captcha: z.string().max(4096).optional(),
 });
 export type CuerpoReserva = z.infer<typeof esquemaReserva>;
 
@@ -335,6 +377,10 @@ export async function reservar(req: Request, res: Response): Promise<void> {
   if (b.sitio && b.sitio.trim() !== '') {
     res.status(201).json({ ok: true });
     return;
+  }
+
+  if (config.TURNSTILE_SECRET && !(await captchaValido(b.captcha, req.ip))) {
+    throw new AppError('No pudimos verificar que no eres un robot. Recarga la página e inténtalo de nuevo.', 400, { codigo: 'CAPTCHA' });
   }
 
   const cfg = await leerConfig(tenantId);
@@ -387,6 +433,21 @@ export async function reservar(req: Request, res: Response): Promise<void> {
           AND a.status = 'pending' AND a.scheduled_date >= $3::date`,
       [tenantId, b.telefono, hoy],
     );
+    // Bloqueados: a mano por el lavadero, o por faltar (2 «No vino» en 90 días).
+    // El mensaje no dice cuál de los dos, ni nada del cliente.
+    const { rows: cli } = await client.query<{ id: string; bloqueado_web: boolean }>(
+      'SELECT id, bloqueado_web FROM customers WHERE tenant_id = $1 AND phone = $2 AND deleted_at IS NULL LIMIT 1',
+      [tenantId, b.telefono],
+    );
+    if (cli[0] && (cli[0].bloqueado_web
+        || (await faltasDe(tenantId, cli[0].id, client.query.bind(client) as typeof db.query)) >= FALTAS_PARA_BLOQUEO)) {
+      throw new AppError(
+        'Este número no puede reservar en línea. Comunícate directamente con el lavadero para agendar.',
+        409,
+        { codigo: 'BLOQUEADO' },
+      );
+    }
+
     if (parseInt(pend[0].n, 10) >= MAX_PENDIENTES_POR_TELEFONO) {
       throw new AppError(
         `Ese número ya tiene ${MAX_PENDIENTES_POR_TELEFONO} reservas pendientes. Para cambiarlas o agregar otra, comunícate con el lavadero.`,
@@ -472,9 +533,9 @@ export async function reservar(req: Request, res: Response): Promise<void> {
     // El precio es el que vio el cliente al elegir el tipo de vehículo.
     const { rows: turno } = await client.query<{ id: string }>(
       `INSERT INTO appointments
-         (tenant_id, customer_id, vehicle_id, service_id, scheduled_date, scheduled_time, price, notes, source)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'web') RETURNING id`,
-      [tenantId, customerId, vehicleId, b.servicioId, b.fecha, b.hora, precioCentavos, b.notas || null],
+         (tenant_id, customer_id, vehicle_id, service_id, scheduled_date, scheduled_time, price, notes, source, por_confirmar)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'web', $9) RETURNING id`,
+      [tenantId, customerId, vehicleId, b.servicioId, b.fecha, b.hora, precioCentavos, b.notas || null, cfg.reservas_por_confirmar],
     );
     await guardarAdicionales(client, tenantId, turno[0].id, adicionales);
     await client.query(
@@ -491,6 +552,7 @@ export async function reservar(req: Request, res: Response): Promise<void> {
       lavadero: cfg.name,
       servicio: svc[0].name,
       adicionales: adicionales.map((a) => a.nombre),
+      porConfirmar: cfg.reservas_por_confirmar,
       fecha: b.fecha,
       etiqueta: etiquetaDeDia(b.fecha, hoy),
       hora: b.hora,
