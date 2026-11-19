@@ -145,8 +145,11 @@ async function ocupadosDelDia(tenantId: string, fecha: string): Promise<TurnoOcu
   const { rows } = await db.query<{ scheduled_time: string; estimated_minutes: number | null }>(
     // Lo que ocupa la bahía es el lavado más sus adicionales («encera tú mismo»).
     `SELECT a.scheduled_time,
-            s.estimated_minutes
-              + COALESCE((SELECT SUM(e.minutes) FROM appointment_extras e WHERE e.appointment_id = a.id), 0)
+            -- ::int: SUM devuelve bigint, que el driver entrega como TEXTO. Sin el
+            -- cast, «420 + '90'» daba '42090' y cada turno ocupaba su bahía hasta
+            -- el final del día (bug de #74, encontrado en noviembre de 2026).
+            (s.estimated_minutes
+              + COALESCE((SELECT SUM(e.minutes) FROM appointment_extras e WHERE e.appointment_id = a.id), 0))::int
               AS estimated_minutes
        FROM appointments a
        JOIN services s ON s.id = a.service_id
@@ -156,7 +159,8 @@ async function ocupadosDelDia(tenantId: string, fecha: string): Promise<TurnoOcu
         AND a.status NOT IN ('cancelled', 'delivered', 'done')`,
     [tenantId, fecha],
   );
-  return rows.map((r) => ({ inicio: aMinutos(r.scheduled_time), minutos: r.estimated_minutes || 60 }));
+  // Number(): defensa por si otra vez llega texto desde la base.
+  return rows.map((r) => ({ inicio: aMinutos(r.scheduled_time), minutos: Number(r.estimated_minutes) || 60 }));
 }
 
 function diasDeLaVentana(cfg: Config): { hoy: string; dias: string[] } {
