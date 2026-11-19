@@ -124,7 +124,7 @@ describe('clientes que no han vuelto', () => {
     await request(app).patch(`/api/appointments/${t.id}/status`).set(auth()).send({ status: 'delivered' });
     expect((await lista()).clientes.map((c: { telefono: string }) => c.telefono)).not.toContain(TEL[0]);
 
-    await db.queryAdmin(`UPDATE appointments SET scheduled_date = CURRENT_DATE - 40 WHERE id = $1`, [t.id]);
+    await db.queryAdmin(`UPDATE appointments a SET scheduled_date = (NOW() AT TIME ZONE tn.timezone)::date - 40 FROM tenants tn WHERE tn.id = a.tenant_id AND a.id = $1`, [t.id]);
     const conEl = (await lista()).clientes.find((c: { telefono: string }) => c.telefono === TEL[0]);
     expect(conEl).toMatchObject({ nombre: 'Fiel0', placa: PLACAS[0], visitas: 1 });
     expect(conEl.diasSinVenir).toBeGreaterThanOrEqual(40);
@@ -140,7 +140,7 @@ describe('clientes que no han vuelto', () => {
     const t = await turnoListo(1);
     await pagar(t.id);
     await request(app).patch(`/api/appointments/${t.id}/status`).set(auth()).send({ status: 'delivered' });
-    await db.queryAdmin(`UPDATE appointments SET scheduled_date = CURRENT_DATE - 40 WHERE id = $1`, [t.id]);
+    await db.queryAdmin(`UPDATE appointments a SET scheduled_date = (NOW() AT TIME ZONE tn.timezone)::date - 40 FROM tenants tn WHERE tn.id = a.tenant_id AND a.id = $1`, [t.id]);
     await request(app).post('/api/appointments/quick').set(auth()).send({
       customerPhone: TEL[1], customerFirstName: 'Fiel1', plate: PLACAS[1], vehicleType: 'sedan', serviceId: completo,
     });

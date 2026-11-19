@@ -17,6 +17,7 @@
  *               responde { active:false } y n8n sigue con la clasificación.
  */
 
+import { getTenantToday } from '../../shared/utils/dateUtils';
 import type { Request, Response } from 'express';
 import type { Redis } from 'ioredis';
 import * as db from '../../shared/db';
@@ -100,9 +101,10 @@ async function resumirDatos(
   const { rows: fut } = await db.query<{ n: string }>(
     `SELECT count(*) AS n FROM appointments
      WHERE tenant_id = $1 AND customer_id = $2
-       AND scheduled_date >= CURRENT_DATE
+       AND scheduled_date >= $3::date
        AND status NOT IN ('cancelled', 'delivered')`,
-    [tenantId, customerId],
+    // Hoy del lavadero, no de la base (UTC): de noche en Colombia ya es mañana.
+    [tenantId, customerId, await getTenantToday(tenantId)],
   );
 
   const { rows: cons } = await db.query<{ consent_at: Date | null }>(
