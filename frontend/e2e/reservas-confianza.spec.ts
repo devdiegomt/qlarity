@@ -60,11 +60,16 @@ test('«¿No vino?» libera la bahía de un turno cuya hora ya pasó', async ({ 
   const placa = `NOV${sufijo()}`;
   const r = await request.post(`${API}/appointments/quick`, {
     headers,
-    // A medianoche: a cualquier hora del día ya pasó hace más de 30 minutos.
+    // A medianoche de hoy.
     data: { autorizaDatos: true, customerPhone: telefono(), customerFirstName: 'Faltón', plate: placa, vehicleType: 'sedan', serviceId: servicios.find((s) => !s.es_adicional)!.id, scheduledTime: '00:00' },
   });
   expect(r.status()).toBe(201);
 
+  // Pasada la medianoche, las 00:00 todavía no llevan 30 minutos: el panel
+  // (bien) no ofrece «No vino». El reloj del navegador va a las 11 p. m. de hoy
+  // para que la prueba no dependa de la hora a la que corra.
+  const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+  await page.clock.setFixedTime(new Date(`${hoy}T23:00:00-05:00`));
   await entrar(page);
   await page.goto('/board');
   const tarjeta = page.locator('div.cursor-pointer', { hasText: placa }).filter({ visible: true }).first();
