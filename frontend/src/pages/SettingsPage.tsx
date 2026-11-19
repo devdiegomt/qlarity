@@ -225,6 +225,20 @@ function GeneralTab() {
         {saved && <span className="text-green-600 text-sm font-medium">Guardado correctamente</span>}
       </div>
     </div>
+    <p className="text-sm text-gray-600 px-1">
+      ¿Quieres repasar la configuración inicial?{' '}
+      <button
+        type="button"
+        onClick={() => {
+          void api('/tenants/me/primeros-pasos', { method: 'POST', body: { abrir: true } })
+            .then(() => toast.success('La guía de primeros pasos está en Inicio'))
+            .catch((e: Error) => toast.error(e.message));
+        }}
+        className="text-brand-700 hover:text-brand-800 font-semibold"
+      >
+        Ver la guía de primeros pasos
+      </button>
+    </p>
     </div>
   );
 }
@@ -241,6 +255,7 @@ function EnlaceReservas({ slug }: { slug: string }) {
     try {
       await navigator.clipboard.writeText(url);
       toast.success('Enlace copiado');
+      void api('/tenants/me/primeros-pasos', { method: 'POST', body: { paso: 'reservas' } }).catch(() => undefined);
     } catch {
       toast.error('No se pudo copiar. Selecciónalo y cópialo a mano.');
     }

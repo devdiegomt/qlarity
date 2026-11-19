@@ -1,3 +1,4 @@
+import PrimerosPasos from '../components/PrimerosPasos';
 import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
@@ -82,6 +83,8 @@ export default function DashboardPage() {
           Nuevo turno
         </button>
       </div>
+
+      <PrimerosPasos />
 
       {/* Stats: una sola franja dividida, no cuatro tarjetas sueltas */}
       {loading ? (

@@ -1,3 +1,5 @@
+import Vacio from "../components/Vacio";
+import PistaPrimeraVez from "../components/PistaPrimeraVez";
 import { inicioDeEspera } from "../lib/fechas";
 import EtiquetaWeb from "../components/EtiquetaWeb";
 import FotosRecepcion from "../components/FotosRecepcion";
@@ -6,7 +8,7 @@ import SellosCliente from "../components/SellosCliente";
 import { useProximas } from "../components/ProximasReservas";
 import { Link } from "react-router-dom";
 import { ESTADOS, PastillaEstado, Placa, PuntoEstado } from "../lib/estados";
-import { Clock, RotateCw, X } from 'lucide-react';
+import { Clock, Columns3, RotateCw, X } from 'lucide-react';
 import {
   useState,
   useEffect,
@@ -283,6 +285,19 @@ export default function BoardPage() {
           </button>
         </div>
       </div>
+
+      <PistaPrimeraVez id="tablero">
+        El <strong>Tablero</strong> es el lavadero hoy: cada carro pasa de <em>Esperando</em> a <em>Lavando</em>,
+        <em> Listo</em> y <em>Entregado</em> con el botón de su tarjeta. Toca la placa para ver el detalle, tomar fotos o
+        enviar la encuesta.
+      </PistaPrimeraVez>
+
+      {!loading && appointments.length === 0 && (
+        <Vacio icono={Columns3} titulo="Hoy todavía no hay carros">
+          Cuando llegue uno, créalo con «Nuevo turno» en Inicio o en la Agenda. Las reservas de hoy de tu página web
+          aparecen aquí solas.
+        </Vacio>
+      )}
 
       {/* Kanban board */}
       {loading ? (
