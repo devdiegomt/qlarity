@@ -163,8 +163,8 @@ export function horasLibres(args: {
 /**
  * Turnos que ocupan bahía ese día. Los terminados (`done`) ya la liberaron
  * aunque el carro no se haya entregado; los cancelados y entregados tampoco
- * cuentan. Un turno sin hora —llegó sin reservar— no se puede ubicar en el día
- * y no se cuenta, igual que en el bot.
+ * cuentan, ni los «No vino». Un turno sin hora —llegó sin reservar— cuenta
+ * desde que se registró o empezó a lavarse.
  */
 async function ocupadosDelDia(tenantId: string, fecha: string): Promise<TurnoOcupado[]> {
   const { rows } = await db.query<{ scheduled_time: string; estimated_minutes: number | null }>(
