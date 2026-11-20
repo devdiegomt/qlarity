@@ -21,6 +21,10 @@ interface Falla {
 }
 
 async function fallasDeContraste(page: Page): Promise<Falla[]> {
+  // Los botones cambian de color con una transición. Medir en mitad de ella da
+  // un color que nunca se queda en pantalla: pasó en CI con la hora recién
+  // elegida, fondo a medio camino entre la tarjeta y el latón (1,74 : 1).
+  await page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== 'running'));
   return page.evaluate(() => {
     const rgb = (c: string): [number, number, number, number] => {
       const m = c.match(/rgba?\(([^)]+)\)/);
