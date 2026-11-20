@@ -101,7 +101,7 @@ async function leerConfig(tenantId: string): Promise<Config & FilaSuscripcion> {
   const { rows } = await db.query<Config & FilaSuscripcion>(
     `SELECT name, address, city, phone, timezone, opening_time, closing_time, bays_count,
             closed_weekdays, booking_days_ahead, plan, reservas_por_confirmar,
-            subscription_status, trial_ends_at, discount_pct, discount_until
+            subscription_status, trial_ends_at, discount_pct, discount_until, to_char(pagado_hasta, 'YYYY-MM-DD') AS pagado_hasta
        FROM tenants WHERE id = $1`,
     [tenantId],
   );

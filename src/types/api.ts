@@ -97,6 +97,14 @@ export interface TenantUsageDto {
     readOnly: boolean;
     discountPct: number;
     discountUntil: string | null;
+    /** Último día cubierto por la mensualidad pagada; null si no hay pagos. */
+    paidUntil: string | null;
+    /** Días hasta paidUntil (0 = hoy, negativo = venció). */
+    daysUntilDue: number | null;
+    /** Venció hace menos de los días de gracia: sigue funcionando. */
+    inGrace: boolean;
+    /** Si se puede pagar desde el panel (ePayco configurado) y en qué modo. */
+    payments: { enabled: boolean; test: boolean };
   };
   /** Los planes que se ofrecen hoy, para comparar. */
   availablePlans: Array<{

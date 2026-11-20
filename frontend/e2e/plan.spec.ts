@@ -14,11 +14,14 @@ test('el administrador ve su plan y los que se ofrecen', async ({ page }) => {
   await entrar(page);
   await page.goto('/settings?tab=plan');
 
-  await expect(page.getByText('Tu plan', { exact: true })).toBeVisible();
+  // «Tu plan» sale también en la tarjeta del plan actual cuando ese plan se
+  // sigue ofreciendo (pasa después de pagarlo: e2e/pagos.spec.ts).
+  await expect(page.getByText('Tu plan', { exact: true }).first()).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Planes' })).toBeVisible();
   // Los dos que se ofrecen, con su precio.
-  await expect(page.getByRole('heading', { name: 'Estudio', exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Estudio Pro', exact: true })).toBeVisible();
+  // Nivel 4: las tarjetas de «Planes». El plan actual también es un título.
+  await expect(page.getByRole('heading', { name: 'Estudio', exact: true, level: 4 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Estudio Pro', exact: true, level: 4 })).toBeVisible();
   await expect(page.locator('main')).toContainText('149.000');
   await expect(page.locator('main')).toContainText('249.000');
 });

@@ -14,7 +14,8 @@ import * as db from '../db';
 import { AppError } from './errorHandler';
 import type { PlanRow } from '../../types/entities';
 import type { TenantUsageDto } from '../../types/api';
-import { estadoDeSuscripcion, precioConDescuento, type FilaSuscripcion } from './suscripcion';
+import { epaycoConfigurado, epaycoEnPruebas } from '../../modules/suscripcion/epayco';
+import { COLUMNAS_SUSCRIPCION, estadoDeSuscripcion, precioConDescuento, type FilaSuscripcion } from './suscripcion';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -211,7 +212,7 @@ export function planFeature(feature: Extract<PlanResource, 'whatsapp' | 'billing
  */
 export async function getTenantUsage(tenantId: string): Promise<TenantUsageDto | null> {
   const { rows: tenantRows } = await db.query<{ plan: string } & FilaSuscripcion>(
-    `SELECT plan, subscription_status, trial_ends_at, discount_pct, discount_until
+    `SELECT plan, ${COLUMNAS_SUSCRIPCION}
        FROM tenants WHERE id = $1`,
     [tenantId],
   );
@@ -264,6 +265,10 @@ export async function getTenantUsage(tenantId: string): Promise<TenantUsageDto |
       readOnly: estado.soloLectura,
       discountPct: tenant.discount_pct,
       discountUntil: tenant.discount_until ? new Date(tenant.discount_until).toISOString().slice(0, 10) : null,
+      paidUntil: tenant.pagado_hasta ? String(tenant.pagado_hasta).slice(0, 10) : null,
+      daysUntilDue: estado.diasParaVencer,
+      inGrace: estado.enGracia,
+      payments: { enabled: epaycoConfigurado(), test: epaycoEnPruebas() },
     },
     availablePlans: Object.values(plans)
       .filter((p) => p.is_active)

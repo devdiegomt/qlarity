@@ -90,6 +90,12 @@ jobs:
       N8N_API_KEY: ci-n8n-key
       BOT_WA_SEND_TOKEN: ci-bot-token
       CORS_ORIGIN: http://localhost:5173
+      # Llaves de ePayco de mentira: activan el botón de pagar, y la prueba
+      # e2e/pagos.spec.ts firma las confirmaciones con P_KEY. No son de ninguna
+      # cuenta real.
+      P_CUST_ID_CLIENT: ci-epayco-cliente
+      P_KEY: ci-epayco-llave
+      PUBLIC_KEY: ci-epayco-publica
 
     steps:
       # Las pruebas necesitan un backend de verdad: la sesión en cookie no se

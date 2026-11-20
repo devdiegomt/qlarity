@@ -818,6 +818,24 @@ La DIAN exige conservar las facturas por **5 años**. Hoy se guarda el ID de la
 factura en Alegra, no el documento. Si la cuenta de Alegra se cerrara, la
 trazabilidad se perdería. Vale evaluar si conviene guardar una copia.
 
+### Pagos de la mensualidad (ePayco)
+
+Qlarity no ve ni guarda datos de tarjetas: el cobro pasa en el checkout de
+ePayco. Lo que hay que proteger es **la confirmación**, porque es lo que activa
+un plan: `POST|GET /api/epayco/confirmacion` es pública (la llama el servidor de
+ePayco) y cualquiera puede llamarla.
+
+| Control | Cómo |
+|---|---|
+| Nadie fabrica una confirmación | Firma `sha256(P_CUST_ID_CLIENT^P_KEY^x_ref_payco^x_transaction_id^x_amount^x_currency_code)`, comparada en tiempo constante. `P_KEY` sólo vive en Render |
+| No se paga menos de lo debido | El monto lo fija el servidor al crear el pago; la confirmación tiene que traer ese monto exacto y `COP` |
+| Un pago de prueba no activa nada en producción | Con `EPAYCO_PRUEBAS=false`, `x_test_request=TRUE` se rechaza |
+| Repeticiones | El pago se bloquea (`FOR UPDATE`) y el mes se suma sólo al pasar a aceptado |
+| Aislamiento | La confirmación encuentra el lavadero por la referencia del pago (como las páginas públicas por su slug) y sigue con RLS; `pagos_suscripcion` tiene su política |
+| La vuelta del checkout | `GET /api/suscripcion/verificar` consulta a ePayco y aplica **las mismas** reglas, firma incluida |
+
+Ver `src/modules/suscripcion/` y `__tests__/pagos-epayco.test.ts`.
+
 ## 7. Brechas abiertas
 
 Ordenadas por relación entre riesgo y esfuerzo.
@@ -975,6 +993,8 @@ Las tres salidas siguen siendo las mismas, y la elección depende del tamaño:
 | `N8N_API_KEY` | n8n → backend | Acceso a datos de clientes vía `wa-bridge` |
 | `BOT_WA_SEND_TOKEN` | backend → bot-wa | Envío de mensajes desde el número del negocio |
 | `SUPABASE_SERVICE_ROLE_KEY` | Backend → Supabase Storage (fotos de recepción) | Acceso total al proyecto de Supabase por su API, incluidas las fotos y la base. Sólo en Render, nunca en el panel; si se filtra, se rota en Supabase y se actualiza en Render |
+| `P_KEY` (ePayco) | Verifica la firma de las confirmaciones de pago | Se pueden fabricar confirmaciones y activar planes sin pagar. Se rota en el panel de ePayco y se actualiza en Render |
+| `PRIVATE_KEY` (ePayco) | API de ePayco (fase 2: cobro automático) | Operar la cuenta de ePayco por API. Rotarla en ePayco |
 
 Reglas:
 
