@@ -101,6 +101,14 @@ jobs:
       - name: Pruebas otra vez, sin resetear
         run: npx jest --ci
 
+      # Las migraciones se corren otra vez, ahora con los datos que dejaron las
+      # pruebas. Cada una tiene que poder repetirse: una restricción que se
+      # recrea más estrecha que la de una migración posterior (pasó con
+      # chk_payments_origen: fidelización sin «tiquetera») choca con filas que ya
+      # existen y corta db:migrate-all a la mitad. Con la base vacía no se ve.
+      - name: Migraciones otra vez, con datos
+        run: npm run db:migrate-all
+
       # La corrida que de verdad ejercita el aislamiento. Como `postgres` las
       # políticas están y no se aplican: pasaría igual con RLS roto.
       - name: Pruebas con RLS aplicándose
