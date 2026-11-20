@@ -23,6 +23,7 @@ import auditRoutes       from './modules/audit/audit.routes';
 import publicoRoutes from './modules/publico/publico.routes';
 import resenasRoutes from './modules/resenas/resenas.routes';
 import paquetesRoutes from './modules/fidelizacion/paquetes.routes';
+import { suscripcionRoutes, confirmacionEpaycoRoutes } from './modules/suscripcion/suscripcion.routes';
 import { initBooking }   from './modules/whatsapp/wa-bridge.booking';
 import { almacenLocal }  from './shared/storage/fotos';
 import Redis             from 'ioredis';
@@ -114,6 +115,8 @@ app.use('/api/superadmin',   superadminRoutes);
 app.use('/api/audit',        auditRoutes);
 app.use('/api/calificaciones', resenasRoutes);
 app.use('/api/paquetes',     paquetesRoutes);
+app.use('/api/suscripcion',  suscripcionRoutes);
+app.use('/api/epayco',       confirmacionEpaycoRoutes);
 // Sin sesión: el aviso de privacidad y la página de reservas de cada lavadero.
 app.use('/api/publico',      publicoRoutes);
 

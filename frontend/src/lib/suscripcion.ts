@@ -34,6 +34,13 @@ export interface Suscripcion {
     readOnly: boolean;
     discountPct: number;
     discountUntil: string | null;
+    /** Último día cubierto por la mensualidad pagada; null sin pagos. */
+    paidUntil: string | null;
+    /** Días hasta paidUntil (0 = hoy, negativo = venció). */
+    daysUntilDue: number | null;
+    /** Venció hace poco: sigue funcionando unos días. */
+    inGrace: boolean;
+    payments: { enabled: boolean; test: boolean };
   };
   availablePlans: PlanOfrecido[];
   usage: { operators: Metrica; appointments: Metrica; services: Metrica };

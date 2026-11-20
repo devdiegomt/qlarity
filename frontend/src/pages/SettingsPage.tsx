@@ -2,7 +2,9 @@ import PaquetesTiquetera from '../components/PaquetesTiquetera';
 import { useState, useEffect, useCallback, type HTMLInputTypeAttribute, type ReactNode } from 'react';
 import { Check, Copy, ExternalLink, Gem, Minus, Sparkles, Store, Users, X, type LucideIcon } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
-import { CONTACTO_VENTAS, useSuscripcion, type Metrica } from '../lib/suscripcion';
+import { CONTACTO_VENTAS, useSuscripcion, type Metrica, type PlanOfrecido, type Suscripcion } from '../lib/suscripcion';
+import { pagarMensualidad } from '../lib/epayco';
+import { fechaCorta } from '../lib/fechas';
 import { api } from '../lib/api';
 import { useAuth } from '../hooks/useAuth';
 import { formatCOP } from '../lib/format';
@@ -759,13 +761,54 @@ const ESTADO: Record<'trial' | 'active' | 'suspended', string> = {
   suspended: 'Suspendido',
 };
 
+/** El precio de un plan con el descuento del lavadero, igual que lo calcula el servidor. */
+function precioPara(p: PlanOfrecido, sub: Suscripcion['subscription']): number {
+  if (!sub.discountPct) return p.priceMonthly;
+  if (sub.discountUntil && new Date(sub.discountUntil + 'T23:59:59') < new Date()) return p.priceMonthly;
+  return Math.round((p.priceMonthly * (100 - sub.discountPct)) / 100);
+}
+
+interface PagoHecho {
+  referencia: string;
+  plan_nombre: string;
+  monto: number;
+  estado: 'pendiente' | 'aceptado' | 'rechazado' | 'reversado';
+  prueba: boolean;
+  metodo: string | null;
+  cubre_desde: string | null;
+  cubre_hasta: string | null;
+  created_at: string;
+}
+
+const ESTADO_PAGO: Record<PagoHecho['estado'], { texto: string; clase: string }> = {
+  aceptado: { texto: 'Pagado', clase: 'bg-green-100 text-green-800' },
+  pendiente: { texto: 'En proceso', clase: 'bg-brand-100 text-brand-800' },
+  rechazado: { texto: 'Rechazado', clase: 'bg-red-100 text-red-800' },
+  reversado: { texto: 'Reversado', clase: 'bg-red-100 text-red-800' },
+};
+
 function PlanTab() {
   const s = useSuscripcion();
+  const { user } = useAuth();
+  const toast = useToast();
+  const [abriendo, setAbriendo] = useState<string | null>(null);
+  const [pagos, setPagos] = useState<PagoHecho[]>([]);
+  useEffect(() => {
+    api<PagoHecho[]>('/suscripcion/pagos').then(setPagos).catch(() => setPagos([]));
+  }, []);
   if (!s) return <div className="h-48 bg-white border border-gray-100 rounded-xl animate-pulse" />;
 
   const { plan, subscription: sub, usage, availablePlans } = s;
   const conDescuento = plan.priceWithDiscount < plan.priceMonthly;
   const ofrecido = availablePlans.some((p) => p.id === plan.id);
+  const puedePagar = sub.payments.enabled && user?.role === 'admin';
+
+  const pagar = (planId: string) => {
+    setAbriendo(planId);
+    pagarMensualidad(planId)
+      .catch((err: Error) => toast.error(err.message))
+      .finally(() => setAbriendo(null));
+  };
 
   return (
     <div className="space-y-6">
@@ -804,6 +847,21 @@ function PlanTab() {
               </p>
             )}
           </div>
+          {sub.paidUntil && (
+            <div>
+              <p className="etiqueta text-gray-500">Pagado hasta</p>
+              <p className="cifra text-xl font-semibold text-gray-900 mt-1">{fechaCorta(sub.paidUntil)}</p>
+              <p className={`text-xs mt-1 ${sub.readOnly || sub.inGrace ? 'text-red-700 font-semibold' : 'text-gray-500'}`}>
+                {sub.readOnly
+                  ? 'La mensualidad venció. Paga para volver a registrar cambios.'
+                  : sub.inGrace
+                    ? 'La mensualidad venció. Tienes unos días para pagar sin perder nada.'
+                    : sub.daysUntilDue === 0
+                      ? 'Vence hoy.'
+                      : `Faltan ${sub.daysUntilDue} ${sub.daysUntilDue === 1 ? 'día' : 'días'}.`}
+              </p>
+            </div>
+          )}
           {sub.status === 'trial' && (sub.trialDaysLeft !== null || sub.readOnly) && (
             <div>
               <p className="etiqueta text-gray-500">Prueba</p>
@@ -850,21 +908,65 @@ function PlanTab() {
                 <Incluye si={p.billing}>Facturación electrónica</Incluye>
                 <Incluye si={p.whatsapp}>Bot de WhatsApp</Incluye>
               </ul>
+              {puedePagar && (
+                <button
+                  type="button"
+                  onClick={() => pagar(p.id)}
+                  disabled={abriendo !== null}
+                  className={`w-full py-2.5 rounded-lg text-sm font-semibold transition disabled:opacity-60 ${
+                    p.id === plan.id ? 'bg-brand-600 hover:bg-brand-700 text-white' : 'border border-gray-200 text-gray-900 hover:border-gray-300'
+                  }`}
+                >
+                  {abriendo === p.id ? 'Abriendo el pago…' : `${p.id === plan.id ? 'Pagar' : 'Cambiar y pagar'} 1 mes · ${formatCOP(precioPara(p, sub))}`}
+                </button>
+              )}
             </div>
           ))}
         </div>
-        <p className="text-sm text-gray-500">
-          Para elegir o cambiar de plan,{' '}
-          {CONTACTO_VENTAS ? (
-            <a href={CONTACTO_VENTAS} target="_blank" rel="noopener" className="text-brand-700 font-semibold underline underline-offset-2">
-              escríbenos
-            </a>
-          ) : (
-            'escríbenos'
-          )}
-          . Pronto se podrá pagar con tarjeta desde acá.
-        </p>
+        {puedePagar ? (
+          <p className="text-sm text-gray-500">
+            Pagas mes a mes con ePayco: tarjeta, PSE, Nequi, Daviplata o efectivo. Sin permanencia: si no pagas el
+            siguiente mes, no se cobra nada.
+            {sub.payments.test && <strong className="block mt-1 text-brand-800">Modo de prueba: los pagos no son reales.</strong>}
+          </p>
+        ) : sub.payments.enabled ? (
+          <p className="text-sm text-gray-500">El pago lo hace el administrador del lavadero.</p>
+        ) : (
+          <p className="text-sm text-gray-500">
+            Para elegir o cambiar de plan,{' '}
+            {CONTACTO_VENTAS ? (
+              <a href={CONTACTO_VENTAS} target="_blank" rel="noopener" className="text-brand-700 font-semibold underline underline-offset-2">
+                escríbenos
+              </a>
+            ) : (
+              'escríbenos'
+            )}
+            .
+          </p>
+        )}
       </section>
+
+      {pagos.length > 0 && (
+        <section className="space-y-3">
+          <h3 className="text-base font-semibold text-gray-900">Tus pagos</h3>
+          <ul className="bg-white rounded-xl border border-gray-100 divide-y divide-gray-100">
+            {pagos.map((p) => (
+              <li key={p.referencia} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-sm">
+                <span className="font-semibold text-gray-900">{p.plan_nombre}</span>
+                <span className="cifra text-gray-900">{formatCOP(p.monto * 100)}</span>
+                <span className="text-gray-500 flex-1 min-w-[10rem]">
+                  {p.cubre_desde && p.cubre_hasta
+                    ? `${fechaCorta(p.cubre_desde)} – ${fechaCorta(p.cubre_hasta)}`
+                    : fechaCorta(p.created_at)}
+                  {p.metodo ? ` · ${p.metodo}` : ''}
+                  {p.prueba ? ' · prueba' : ''}
+                </span>
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded ${ESTADO_PAGO[p.estado].clase}`}>{ESTADO_PAGO[p.estado].texto}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }

@@ -183,7 +183,7 @@ describe('las cuentas, sin base de datos', () => {
   });
   it('el último día de prueba todavía cuenta como un día', () => {
     const fin = new Date(ahora.getTime() + 60 * 60 * 1000);
-    expect(estadoDeSuscripcion({ subscription_status: 'trial', trial_ends_at: fin }, ahora)).toEqual({
+    expect(estadoDeSuscripcion({ subscription_status: 'trial', trial_ends_at: fin }, ahora)).toMatchObject({
       soloLectura: false,
       diasDePrueba: 1,
     });

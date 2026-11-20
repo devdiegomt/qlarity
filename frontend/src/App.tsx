@@ -20,6 +20,7 @@ import PaymentsPage from './pages/PaymentsPage';
 import HistoryPage from './pages/HistoryPage';
 import ReportsPage from './pages/ReportsPage';
 import SettingsPage from './pages/SettingsPage';
+import PagoResultadoPage from './pages/PagoResultadoPage';
 import BillingPage from './pages/BillingPage';
 import SuperAdminPage from './pages/SuperAdminPage';
 import AccountPage from './pages/AccountPage';
@@ -56,6 +57,7 @@ function AppRoutes() {
         <Route path="reports"      element={<ReportsPage />} />
         <Route path="history"      element={<HistoryPage />} />
         <Route path="settings"     element={<SettingsPage />} />
+        <Route path="plan/pago"    element={<PagoResultadoPage />} />
         {/* Sin `adminOnly`: cambiar la contraseña propia lo tiene que poder
             hacer cualquiera, no sólo un admin. */}
         <Route path="cuenta"       element={<AccountPage />} />
