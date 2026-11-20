@@ -35,7 +35,10 @@ COMMENT ON COLUMN tenants.fidelidad_dias_regreso IS
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS origen VARCHAR(20) NOT NULL DEFAULT 'normal';
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS descuento INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE payments DROP CONSTRAINT IF EXISTS chk_payments_origen;
-ALTER TABLE payments ADD CONSTRAINT chk_payments_origen CHECK (origen IN ('normal', 'premio'));
+-- 'tiquetera' también, aunque la agrega migrate-tiquetera: si esta migración se
+-- vuelve a correr sobre una base con pagos de tiquetera, una lista más corta
+-- choca con esas filas y corta db:migrate-all a la mitad.
+ALTER TABLE payments ADD CONSTRAINT chk_payments_origen CHECK (origen IN ('normal', 'premio', 'tiquetera'));
 ALTER TABLE payments DROP CONSTRAINT IF EXISTS chk_payments_descuento;
 ALTER TABLE payments ADD CONSTRAINT chk_payments_descuento CHECK (descuento >= 0 AND amount >= 0);
 COMMENT ON COLUMN payments.origen IS
