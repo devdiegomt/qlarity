@@ -24,6 +24,14 @@
  * nunca pagó. En prueba, desde el día en que termina la prueba: pagar antes no
  * hace perder los días gratis.
  *
+ * ## Cada consulta lleva su `tenant_id`
+ *
+ * Aunque `pagos_suscripcion` tiene RLS, ninguna consulta de este archivo se
+ * apoya sólo en eso: si la conexión es con un usuario que se salta RLS (como
+ * en producción hasta noviembre de 2026), un `SELECT` sin `tenant_id` le
+ * mostraba a cada lavadero los pagos de todos. Es la regla del resto del
+ * código (docs/05-seguridad.md §3), y aquí no se había cumplido.
+ *
  * ## Repeticiones
  *
  * ePayco reintenta la confirmación, y el panel también verifica: el mismo pago
@@ -162,11 +170,12 @@ export interface Resultado {
  * pago ya abierto (RLS): la confirmación pública lo abre por la referencia; la
  * verificación del panel, por la sesión.
  */
-export async function procesarConfirmacion(d: DatosEpayco): Promise<Resultado> {
+export async function procesarConfirmacion(d: DatosEpayco, tenantId: string): Promise<Resultado> {
   const referencia = String(d.x_id_invoice ?? d.x_extra1 ?? '').trim();
-  const { rows } = await db.query<FilaPago>(`SELECT ${COLUMNAS_PAGO} FROM pagos_suscripcion WHERE referencia = $1`, [
-    referencia,
-  ]);
+  const { rows } = await db.query<FilaPago>(
+    `SELECT ${COLUMNAS_PAGO} FROM pagos_suscripcion WHERE referencia = $1 AND tenant_id = $2`,
+    [referencia, tenantId],
+  );
   const pago = rows[0];
   if (!pago) throw new AppError('Pago no encontrado', 404);
 
@@ -195,8 +204,8 @@ export async function procesarConfirmacion(d: DatosEpayco): Promise<Resultado> {
   await db.query('BEGIN');
   try {
     const { rows: bloqueado } = await db.query<FilaPago>(
-      `SELECT ${COLUMNAS_PAGO} FROM pagos_suscripcion WHERE id = $1 FOR UPDATE`,
-      [pago.id],
+      `SELECT ${COLUMNAS_PAGO} FROM pagos_suscripcion WHERE id = $1 AND tenant_id = $2 FOR UPDATE`,
+      [pago.id, tenantId],
     );
     const actual = bloqueado[0];
     const datos: Array<string | number | null> = [
@@ -214,16 +223,16 @@ export async function procesarConfirmacion(d: DatosEpayco): Promise<Resultado> {
     } else if (actual.estado === 'pendiente' && nuevo !== 'aceptado' && nuevo !== 'reversado') {
       await db.query(
         `UPDATE pagos_suscripcion SET estado = $2, ref_payco = $3, transaccion = $4, codigo = $5, motivo = $6,
-                metodo = $7, updated_at = NOW() WHERE id = $1`,
-        [actual.id, nuevo, ...datos],
+                metodo = $7, updated_at = NOW() WHERE id = $1 AND tenant_id = $8`,
+        [actual.id, nuevo, ...datos, tenantId],
       );
     }
     // Cualquier otra combinación (aceptado que vuelve a llegar, rechazo tardío
     // de algo ya aceptado…) no cambia nada.
     await db.query('COMMIT');
     const { rows: final } = await db.query<{ estado: EstadoPago }>(
-      'SELECT estado FROM pagos_suscripcion WHERE id = $1',
-      [pago.id],
+      'SELECT estado FROM pagos_suscripcion WHERE id = $1 AND tenant_id = $2',
+      [pago.id, tenantId],
     );
     return { referencia, estado: final[0].estado, ignorado: null };
   } catch (err) {
@@ -254,8 +263,8 @@ async function aceptar(pago: FilaPago, datos: Array<string | number | null>): Pr
 
   await db.query(
     `UPDATE pagos_suscripcion SET estado = 'aceptado', ref_payco = $2, transaccion = $3, codigo = $4, motivo = $5,
-            metodo = $6, cubre_desde = $7, cubre_hasta = $8, updated_at = NOW() WHERE id = $1`,
-    [pago.id, ...datos, desde, hasta],
+            metodo = $6, cubre_desde = $7, cubre_hasta = $8, updated_at = NOW() WHERE id = $1 AND tenant_id = $9`,
+    [pago.id, ...datos, desde, hasta, pago.tenant_id],
   );
   await db.query(
     `UPDATE tenants SET subscription_status = 'active', plan = $2, pagado_hasta = $3 WHERE id = $1`,
@@ -268,8 +277,9 @@ async function aceptar(pago: FilaPago, datos: Array<string | number | null>): Pr
 async function reversar(pago: FilaPago, datos: Array<string | number | null>): Promise<void> {
   await db.query(
     `UPDATE pagos_suscripcion SET estado = 'reversado', ref_payco = COALESCE($2, ref_payco),
-            transaccion = COALESCE($3, transaccion), codigo = $4, motivo = $5, updated_at = NOW() WHERE id = $1`,
-    [pago.id, ...datos.slice(0, 4)],
+            transaccion = COALESCE($3, transaccion), codigo = $4, motivo = $5, updated_at = NOW()
+      WHERE id = $1 AND tenant_id = $6`,
+    [pago.id, ...datos.slice(0, 4), pago.tenant_id],
   );
   if (pago.cubre_desde && pago.cubre_hasta) {
     await db.query(
@@ -292,6 +302,7 @@ function sumarDias(fecha: string, dias: number): string {
  * responde, se devuelve lo que haya: la confirmación llegará sola.
  */
 export async function verificar(
+  tenantId: string,
   refPayco: string,
   propia?: string,
 ): Promise<{ referencia: string | null; estado: EstadoPago | null }> {
@@ -303,7 +314,10 @@ export async function verificar(
   // llegar primero). Con RLS, uno de otro lavadero no aparece.
   const enBase = async () => {
     if (!propia) return { referencia: null, estado: null };
-    const { rows } = await db.query<{ estado: EstadoPago }>('SELECT estado FROM pagos_suscripcion WHERE referencia = $1', [propia]);
+    const { rows } = await db.query<{ estado: EstadoPago }>(
+      'SELECT estado FROM pagos_suscripcion WHERE referencia = $1 AND tenant_id = $2',
+      [propia, tenantId],
+    );
     return rows[0] ? { referencia: propia, estado: rows[0].estado } : { referencia: null, estado: null };
   };
   const yaSabido = await enBase();
@@ -323,27 +337,28 @@ export async function verificar(
   if (!datos) return yaSabido;
 
   const referencia = String(datos.x_id_invoice ?? datos.x_extra1 ?? '').trim();
-  // Con RLS, un pago de otro lavadero no aparece: no se puede verificar ajeno.
+  // Un pago de otro lavadero no aparece: no se puede verificar ajeno.
   const { rows } = await db.query<{ estado: EstadoPago }>(
-    'SELECT estado FROM pagos_suscripcion WHERE referencia = $1',
-    [referencia],
+    'SELECT estado FROM pagos_suscripcion WHERE referencia = $1 AND tenant_id = $2',
+    [referencia, tenantId],
   );
   if (!rows[0]) return yaSabido;
   if (rows[0].estado !== 'pendiente') return { referencia, estado: rows[0].estado };
 
-  const r = await procesarConfirmacion(datos);
+  const r = await procesarConfirmacion(datos, tenantId);
   return { referencia, estado: r.estado };
 }
 
-export async function listarPagos(): Promise<unknown[]> {
+export async function listarPagos(tenantId: string): Promise<unknown[]> {
   const { rows } = await db.query(
     `SELECT p.referencia, p.plan, pl.name AS plan_nombre, p.monto, p.estado, p.prueba, p.metodo, p.motivo,
             to_char(p.cubre_desde, 'YYYY-MM-DD') AS cubre_desde, to_char(p.cubre_hasta, 'YYYY-MM-DD') AS cubre_hasta,
             p.created_at
        FROM pagos_suscripcion p JOIN plans pl ON pl.id = p.plan
-      WHERE p.estado <> 'pendiente' OR p.created_at > NOW() - INTERVAL '1 day'
+      WHERE p.tenant_id = $1 AND (p.estado <> 'pendiente' OR p.created_at > NOW() - INTERVAL '1 day')
       ORDER BY p.created_at DESC
       LIMIT 24`,
+    [tenantId],
   );
   return rows;
 }
