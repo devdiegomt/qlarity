@@ -296,6 +296,53 @@ describe('al volver del checkout', () => {
   });
 });
 
+describe('entre lavaderos', () => {
+  // Corre también con un usuario que se salta RLS (el dueño de la base, como
+  // producción en noviembre de 2026): ahí sólo protege el tenant_id de cada
+  // consulta. Sin él, cada lavadero veía los pagos de todos.
+  let otro: string;
+  let otroId: string;
+  beforeAll(async () => {
+    const r = await request(app).post('/api/onboarding/register').send({
+      aceptaPolitica: true,
+      businessName: 'Otro Lavadero Pagos',
+      phone: '3007776611',
+      openingTime: '08:00',
+      closingTime: '18:00',
+      adminEmail: `pagos-otro-${Date.now()}@ejemplo.co`,
+      adminPassword: 'Segura123',
+      adminFirstName: 'Otra',
+    });
+    expect(r.status).toBe(201);
+    otro = r.body.accessToken;
+    otroId = r.body.tenant.id;
+  });
+  afterAll(async () => {
+    await db.queryAdmin('DELETE FROM pagos_suscripcion WHERE tenant_id = $1', [otroId]);
+    await db.queryAdmin('DELETE FROM tenants WHERE id = $1', [otroId]);
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('un lavadero no ve los pagos de otro', async () => {
+    const { referencia, monto } = (await checkout()).body;
+    await confirmar(confirmacion(referencia, monto));
+    expect((await request(app).get('/api/suscripcion/pagos').set(auth())).body.map((p: { referencia: string }) => p.referencia)).toContain(referencia);
+    expect((await request(app).get('/api/suscripcion/pagos').set(auth(otro))).body).toEqual([]);
+  });
+
+  it('ni puede consultar ni procesar el pago de otro', async () => {
+    const { referencia, monto } = (await checkout()).body;
+    expect((await request(app).get('/api/suscripcion/verificar').query({ referencia }).set(auth(otro))).body).toEqual({
+      referencia: null,
+      estado: null,
+    });
+    const d = confirmacion(referencia, monto);
+    jest.spyOn(global, 'fetch').mockResolvedValueOnce(new Response(JSON.stringify({ data: d }), { status: 200 }));
+    expect((await request(app).get('/api/suscripcion/verificar').query({ ref_payco: d.x_ref_payco }).set(auth(otro))).body.estado).toBeNull();
+    expect((await pago(referencia)).estado).toBe('pendiente');
+  });
+});
+
 describe('el vencimiento', () => {
   const quick = () =>
     request(app).post('/api/appointments/quick').set(auth()).send({
