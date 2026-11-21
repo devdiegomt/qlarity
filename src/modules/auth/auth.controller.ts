@@ -118,6 +118,20 @@ export async function login(req: Request, res: Response): Promise<void> {
 
 // ─── Refresh ──────────────────────────────────────────────────────────────────
 
+/**
+ * Segundos que un refresh token recién rotado sigue sirviendo.
+ *
+ * Sin margen, perder la respuesta de un refresh saca al usuario: el servidor ya
+ * anuló el token viejo y la cookie nueva nunca llegó. Pasa al recargar y
+ * navegar enseguida (el navegador corta la petición en vuelo) y con mala señal
+ * en el celular. Lo atrapó la prueba de primeros pasos en Firefox y en Safari
+ * móvil: recargaba, iba a otra sección y caía en el login.
+ *
+ * El margen es sólo para la **rotación**. Cerrar sesión y cambiar la contraseña
+ * vencen el token en el acto (`expires_at = NOW()`), así que no lo tienen.
+ */
+export const MARGEN_ROTACION_S = 30;
+
 export async function refresh(req: Request, res: Response): Promise<void> {
   // De la cookie, no del cuerpo. El cuerpo se sigue aceptando como transición
   // para un frontend viejo; ver `leerRefreshToken`.
@@ -140,9 +154,10 @@ export async function refresh(req: Request, res: Response): Promise<void> {
      FROM refresh_tokens rt
      JOIN users u ON u.id = rt.user_id
      LEFT JOIN tenants t ON t.id = u.tenant_id
-     WHERE rt.token_hash = $1 AND rt.revoked_at IS NULL AND rt.expires_at > NOW()
+     WHERE rt.token_hash = $1 AND rt.expires_at > NOW()
+       AND (rt.revoked_at IS NULL OR rt.revoked_at > NOW() - make_interval(secs => $2))
      LIMIT 1`,
-    [tokenHash],
+    [tokenHash, MARGEN_ROTACION_S],
   );
 
   if (rows.length === 0) throw new AppError('Refresh token inválido o expirado', 401);
@@ -169,7 +184,8 @@ export async function refresh(req: Request, res: Response): Promise<void> {
     throw new AppError('Tu cuenta de lavadero está desactivada', 403);
   }
 
-  await db.query('UPDATE refresh_tokens SET revoked_at = NOW() WHERE id = $1', [tokenRow.id]);
+  // Usarlo dentro del margen no lo estira: revoked_at queda en la primera vez.
+  await db.query('UPDATE refresh_tokens SET revoked_at = COALESCE(revoked_at, NOW()) WHERE id = $1', [tokenRow.id]);
 
   const userForToken: UserForToken = {
     id: tokenRow.user_id,
@@ -205,14 +221,12 @@ export async function logout(req: Request, res: Response): Promise<void> {
 
   if (refreshToken) {
     await db.query(
-      'UPDATE refresh_tokens SET revoked_at = NOW() WHERE token_hash = $1 AND user_id = $2',
+      `UPDATE refresh_tokens SET revoked_at = COALESCE(revoked_at, NOW()), expires_at = LEAST(expires_at, NOW())
+        WHERE token_hash = $1 AND user_id = $2`,
       [hashToken(refreshToken), req.user!.id],
     );
   } else {
-    await db.query(
-      'UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL',
-      [req.user!.id],
-    );
+    await anularSesiones(req.user!.id);
   }
 
   // Sin esto el navegador conserva la cookie y la sesión "cerrada" se puede
@@ -305,13 +319,22 @@ export async function cambiarPropiaPassword(req: Request, res: Response): Promis
     req.user!.id,
   ]);
 
-  await db.query(
-    'UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL',
-    [req.user!.id],
-  );
+  await anularSesiones(req.user!.id);
   borrarRefreshCookie(res);
 
   res.json({
     message: 'Contraseña actualizada. Todas las sesiones se cerraron; entra de nuevo.',
   });
+}
+
+/**
+ * Cierra todas las sesiones de un usuario, en el acto. Vence también los
+ * tokens rotados hace segundos, que todavía estarían en el margen.
+ */
+async function anularSesiones(userId: string): Promise<void> {
+  await db.query(
+    `UPDATE refresh_tokens SET revoked_at = COALESCE(revoked_at, NOW()), expires_at = LEAST(expires_at, NOW())
+      WHERE user_id = $1 AND expires_at > NOW()`,
+    [userId],
+  );
 }
