@@ -31,14 +31,20 @@ suscripcionRoutes.post(
 suscripcionRoutes.get(
   '/verificar',
   asyncHandler(async (req: Request, res: Response) => {
-    res.json(await verificar(String(req.query.ref_payco ?? ''), req.query.referencia ? String(req.query.referencia) : undefined));
+    res.json(
+      await verificar(
+        req.tenantId!,
+        String(req.query.ref_payco ?? ''),
+        req.query.referencia ? String(req.query.referencia) : undefined,
+      ),
+    );
   }),
 );
 
 suscripcionRoutes.get(
   '/pagos',
-  asyncHandler(async (_req: Request, res: Response) => {
-    res.json(await listarPagos());
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json(await listarPagos(req.tenantId!));
   }),
 );
 
@@ -62,7 +68,8 @@ const confirmar = [
     'Pago no encontrado',
   ),
   asyncHandler(async (req: Request, res: Response) => {
-    const r = await procesarConfirmacion(datos(req));
+    // abrirContextoResolviendo dejó en req.tenantId el lavadero del pago.
+    const r = await procesarConfirmacion(datos(req), req.tenantId!);
     // Firma o monto que no cuadran: 400 y nada cambia. Lo demás, 200, para que
     // ePayco no siga reintentando algo ya procesado.
     res.status(r.ignorado ? 400 : 200).json({ estado: r.estado, ...(r.ignorado ? { error: r.ignorado } : {}) });

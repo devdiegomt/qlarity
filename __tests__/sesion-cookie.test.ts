@@ -109,13 +109,46 @@ describe('renovar la sesión', () => {
     const segunda = cookieDe(renovada);
     expect(segunda).not.toBe(primera);
 
-    // Si alguien robó la primera, deja de valer en cuanto el dueño renueva.
+    // Si alguien robó la primera, deja de valer pasado el margen de rotación
+    // (MARGEN_ROTACION_S): acá se simula que ya pasó.
+    await db.queryAdmin(
+      `UPDATE refresh_tokens SET revoked_at = NOW() - INTERVAL '1 minute'
+        WHERE user_id = (SELECT id FROM users WHERE email = $1) AND revoked_at > NOW() - INTERVAL '1 minute'`,
+      [EMAIL],
+    );
     const conLaVieja = await request(app)
       .post('/api/auth/refresh')
       .set('Cookie', primera)
       .set(CABECERA_INTENCION, '1')
       .send({});
     expect(conLaVieja.status).toBe(401);
+  });
+
+  it('si la respuesta del refresh se pierde, la cookie vieja sirve unos segundos', async () => {
+    // Recargar y navegar enseguida corta la petición en vuelo: el servidor ya
+    // rotó, pero la cookie nueva no llegó. Sin margen, eso sacaba al usuario.
+    const primera = cookieDe(await entrar());
+    const refrescar = (c: string) =>
+      request(app).post('/api/auth/refresh').set('Cookie', c).set(CABECERA_INTENCION, '1').send({});
+    expect((await refrescar(primera)).status).toBe(200); // esta respuesta «se pierde»
+    const otraVez = await refrescar(primera);
+    expect(otraVez.status).toBe(200);
+    expect((await refrescar(cookieDe(otraVez))).status).toBe(200);
+  });
+
+  it('cerrar sesión no deja margen: la cookie recién rotada tampoco sirve', async () => {
+    const login = await entrar();
+    const primera = cookieDe(login);
+    const renovada = await request(app).post('/api/auth/refresh').set('Cookie', primera).set(CABECERA_INTENCION, '1').send({});
+    await request(app)
+      .post('/api/auth/logout')
+      .set('Authorization', `Bearer ${renovada.body.accessToken as string}`)
+      .set(CABECERA_INTENCION, '1')
+      .send({});
+    for (const c of [primera, cookieDe(renovada)]) {
+      const r = await request(app).post('/api/auth/refresh').set('Cookie', c).set(CABECERA_INTENCION, '1').send({});
+      expect(r.status).toBe(401);
+    }
   });
 
   it('el access token que devuelve sirve de verdad', async () => {

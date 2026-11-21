@@ -37,6 +37,15 @@ El refresh token **rota de verdad**: al usarlo se revoca (`revoked_at = NOW()`)
 y se emite uno nuevo. Si alguien roba un refresh y lo usa, el legítimo deja de
 funcionar — la anomalía se vuelve visible.
 
+**Con un margen de 30 segundos** (`MARGEN_ROTACION_S`): el token recién rotado
+todavía sirve ese tiempo. Sin margen, perder la respuesta de un refresh —el
+navegador la corta al recargar y navegar enseguida, o se cae la señal del
+celular— sacaba al usuario: el servidor ya había anulado el viejo y la cookie
+nueva nunca llegó. Lo atraparon las pruebas del panel en Firefox y Safari móvil.
+Es el «reuse interval» de Auth0. Cerrar sesión y cambiar la contraseña **no
+tienen margen**: vencen los tokens en el acto (`expires_at = NOW()`), incluidos
+los rotados hace segundos.
+
 En la base sólo se guarda el **hash** del refresh, no el token. Quien lea la
 tabla no puede suplantar a nadie.
 
